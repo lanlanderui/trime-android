@@ -15,8 +15,10 @@ import com.osfans.trime.data.theme.model.ColorScheme
  */
 internal object ColorSchemeResolver {
     private const val DEFAULT_SCHEME = "default"
-    private const val LIGHT_SCHEME_KEY = "light_scheme"
-    private const val DARK_SCHEME_KEY = "dark_scheme"
+
+    /** Scheme keys linking a scheme to its day/night counterpart; also written by [DynamicColorScheme]. */
+    internal const val LIGHT_SCHEME_KEY = "light_scheme"
+    internal const val DARK_SCHEME_KEY = "dark_scheme"
 
     /**
      * @param schemes color schemes of a theme that is known to be usable;
@@ -64,4 +66,27 @@ internal object ColorSchemeResolver {
             }
         return resolved ?: defaultScheme
     }
+
+    /**
+     * The full list a picker offers: the theme's presets plus the built-in dynamic scheme.
+     *
+     * The dynamic scheme is not a preset, so this is the only thing that keeps it selectable
+     * regardless of what a theme declares. It sorts last, and a preset reusing its reserved id is
+     * dropped rather than duplicated — a theme can therefore neither hide it nor shadow it.
+     *
+     * Part of this object rather than of `ColorManager` for the same reason as [resolve]: it has
+     * to stay unit-testable.
+     *
+     * @param dynamic the built-in scheme, or null on platforms without the system palettes; the
+     *   presets then pass through untouched.
+     */
+    fun selectable(
+        presets: List<ColorScheme>,
+        dynamic: ColorScheme?,
+    ): List<ColorScheme> =
+        if (dynamic == null) {
+            presets
+        } else {
+            presets.filterNot { it.id == dynamic.id } + dynamic
+        }
 }

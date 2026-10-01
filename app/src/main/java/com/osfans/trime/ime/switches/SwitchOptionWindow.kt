@@ -7,7 +7,6 @@ package com.osfans.trime.ime.switches
 
 import android.app.Dialog
 import android.view.View
-import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.osfans.trime.R
@@ -26,6 +25,7 @@ import com.osfans.trime.ime.dialog.EnabledSchemaPickerDialog
 import com.osfans.trime.ime.window.BoardWindow
 import com.osfans.trime.ui.main.settings.ThemePickerDialog
 import com.osfans.trime.util.AppUtils
+import com.osfans.trime.util.ImePopupMenu
 import kotlinx.coroutines.launch
 import org.kodein.di.DI
 import org.kodein.di.instance
@@ -70,7 +70,7 @@ class SwitchOptionWindow(di: DI) :
         )
     }
 
-    var popupMenu: PopupMenu? = null
+    var popupMenu: ImePopupMenu? = null
 
     private val saveOptions by lazy {
         RimeConfig.openConfig("default").use {
@@ -137,23 +137,28 @@ class SwitchOptionWindow(di: DI) :
                                 it.applyOption(entry.switch.name, !oldValue)
                             }
                         } else {
-                            val popup = PopupMenu(context, view)
-                            val menu = popup.menu
-                            entry.switch.states.forEachIndexed { i, state ->
-                                menu.add(0, 0, 0, state).apply {
-                                    setOnMenuItemClickListener {
-                                        rime.launchOnReady {
-                                            options.forEachIndexed { j, option ->
-                                                it.applyOption(option, i == j)
-                                            }
+                            // A switch declaring `options` in the schema yaml has one state per
+                            // option, so the states have to be offered as a list. This was a
+                            // `PopupMenu`, which drops the input session and tears this window down
+                            // the moment it opens; see `ImePopupMenu`.
+                            val menu = ImePopupMenu(view)
+                            entry.switch.states.forEachIndexed { stateIndex, state ->
+                                val checked = stateIndex == entry.selectedIndex
+                                menu.item(
+                                    title = state,
+                                    icon = if (checked) R.drawable.ic_baseline_check_circle_24 else 0,
+                                ) {
+                                    rime.launchOnReady {
+                                        options.forEachIndexed { optionIndex, option ->
+                                            it.applyOption(option, stateIndex == optionIndex)
                                         }
-                                        true
                                     }
                                 }
                             }
                             popupMenu?.dismiss()
-                            popupMenu = popup
-                            popup.show()
+                            popupMenu = menu
+                            menu.onDismiss = { if (menu === popupMenu) popupMenu = null }
+                            menu.show()
                         }
                     }
                 }

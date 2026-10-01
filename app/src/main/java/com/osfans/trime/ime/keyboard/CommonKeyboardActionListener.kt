@@ -228,7 +228,7 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
             }
 
             private fun handleColorScheme(arg: String) {
-                ThemeManager.activeTheme.colorSchemes
+                ColorManager.availableColorSchemes
                     .find { it.id == arg }
                     ?.let { ColorManager.setColorScheme(it) }
             }

@@ -5,17 +5,14 @@
 
 package com.osfans.trime.ime.clipboard
 
-import android.os.Build
 import android.view.ViewGroup
-import android.widget.PopupMenu
 import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.osfans.trime.R
 import com.osfans.trime.data.db.DatabaseBean
 import com.osfans.trime.data.theme.ThemeScope
-import com.osfans.trime.util.DeviceUtils
-import com.osfans.trime.util.item
+import com.osfans.trime.util.ImePopupMenu
 import splitties.resources.styledColor
 import kotlin.math.min
 
@@ -60,7 +57,7 @@ abstract class ClipboardAdapter(
         }
     }
 
-    private var popupMenu: PopupMenu? = null
+    private var popupMenu: ImePopupMenu? = null
 
     class ViewHolder(
         val ui: ClipboardBeanUi,
@@ -82,46 +79,39 @@ abstract class ClipboardAdapter(
             root.setOnClickListener {
                 onPaste(bean)
             }
-            root.setOnLongClickListener {
-                val popup = PopupMenu(ctx, it)
-                val menu = popup.menu
+            root.setOnLongClickListener { anchor ->
                 val iconTint = ctx.styledColor(android.R.attr.colorControlNormal)
-                menu.item(R.string.edit, R.drawable.ic_baseline_edit_24, iconTint) {
-                    onEdit(bean.id)
-                }
-                menu.item(R.string.share, R.drawable.ic_baseline_share_24, iconTint) {
-                    onShare(bean)
-                }
-                menu.item(R.string.word_segment, R.drawable.ic_baseline_view_comfy_24, iconTint) {
-                    onSegment(bean)
-                }
-
-                if (enableCollection) {
-                    menu.item(R.string.collect, R.drawable.ic_baseline_star_24, iconTint) {
-                        onCollect(bean)
-                    }
-                    if (bean.pinned) {
-                        menu.item(R.string.simple_key_unpin, R.drawable.ic_outline_push_pin_24, iconTint) {
-                            onUnpin(bean.id)
+                val menu =
+                    ImePopupMenu(anchor)
+                        .item(R.string.edit, R.drawable.ic_baseline_edit_24, iconTint) {
+                            onEdit(bean.id)
+                        }.item(R.string.share, R.drawable.ic_baseline_share_24, iconTint) {
+                            onShare(bean)
+                        }.item(R.string.word_segment, R.drawable.ic_baseline_view_comfy_24, iconTint) {
+                            onSegment(bean)
+                        }.apply {
+                            if (enableCollection) {
+                                item(R.string.collect, R.drawable.ic_baseline_star_24, iconTint) {
+                                    onCollect(bean)
+                                }
+                                if (bean.pinned) {
+                                    item(R.string.simple_key_unpin, R.drawable.ic_outline_push_pin_24, iconTint) {
+                                        onUnpin(bean.id)
+                                    }
+                                } else {
+                                    item(R.string.simple_key_pin, R.drawable.ic_baseline_push_pin_24, iconTint) {
+                                        onPin(bean.id)
+                                    }
+                                }
+                            }
+                            item(R.string.delete, R.drawable.ic_baseline_delete_24, iconTint) {
+                                onDelete(bean.id)
+                            }
+                            onDismiss = { if (this === popupMenu) popupMenu = null }
                         }
-                    } else {
-                        menu.item(R.string.simple_key_pin, R.drawable.ic_baseline_push_pin_24, iconTint) {
-                            onPin(bean.id)
-                        }
-                    }
-                }
-                menu.item(R.string.delete, R.drawable.ic_baseline_delete_24, iconTint) {
-                    onDelete(bean.id)
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !DeviceUtils.isSamsungOneUI) {
-                    popup.setForceShowIcon(true)
-                }
-                popup.setOnDismissListener { p ->
-                    if (p === popupMenu) popupMenu = null
-                }
                 popupMenu?.dismiss()
-                popupMenu = popup
-                popup.show()
+                popupMenu = menu
+                menu.show()
                 true
             }
         }

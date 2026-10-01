@@ -136,4 +136,39 @@ class ColorSchemeResolverTest :
                 e.message shouldBe "The theme defines no color scheme"
             }
         }
+        Given("the list offered to a picker") {
+            val presets = listOf(scheme("default"), scheme("plain"))
+            val dynamic = scheme("dynamic")
+
+            When("the platform provides the system palettes") {
+                Then("the dynamic scheme is appended last") {
+                    ColorSchemeResolver.selectable(presets, dynamic).map { it.id } shouldBe
+                        listOf("default", "plain", "dynamic")
+                }
+            }
+            When("the platform provides no system palettes") {
+                Then("only the presets are offered") {
+                    ColorSchemeResolver.selectable(presets, null).map { it.id } shouldBe
+                        listOf("default", "plain")
+                }
+            }
+            When("a preset reuses the reserved dynamic id") {
+                val shadowing =
+                    listOf(scheme("default"), scheme("dynamic", "back_color" to "#FF000000"))
+
+                Then("it is dropped instead of showing the id twice") {
+                    ColorSchemeResolver.selectable(shadowing, dynamic).map { it.id } shouldBe
+                        listOf("default", "dynamic")
+                }
+                Then("the entry that survives is the built-in scheme, not the preset") {
+                    ColorSchemeResolver.selectable(shadowing, dynamic).last() shouldBe dynamic
+                }
+            }
+            When("a theme declares no preset at all") {
+                Then("the dynamic scheme is still offered") {
+                    ColorSchemeResolver.selectable(emptyList(), dynamic).map { it.id } shouldBe
+                        listOf("dynamic")
+                }
+            }
+        }
     })

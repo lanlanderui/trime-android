@@ -22,6 +22,7 @@
     <string name="selected_theme_summary">选取主题</string>
     <string name="normal_mode_color">配色</string>
     <string name="normal_mode_color_summary">选取配色</string>
+    <string name="dynamic_color_scheme">动态配色</string>
     <string name="sound_on_keypress">按键声音</string>
     <string name="sound_volume">按键音量</string>
     <string name="vibrate_on_key_press">按键时振动</string>
@@ -152,14 +153,16 @@
     <string name="enable_landscape_mode">启用横屏模式</string>
     <string name="split_space_percent">自动分割键盘比例</string>
     <string name="floating_keyboard">悬浮键盘</string>
-    <string name="floating_keyboard_summary">将键盘显示为可移动卡片。可通过工具栏按钮切换模式，拖动顶部横条调整位置，双击横条恢复默认位置。</string>
+    <string name="floating_keyboard_summary">将键盘显示为可移动卡片。拖动左下角手柄或双指拖动可移动键盘，双击手柄恢复默认位置，拖动右下角可调整大小。</string>
     <string name="floating_keyboard_width">悬浮键盘宽度</string>
     <string name="floating_keyboard_height">悬浮键盘高度</string>
     <string name="floating_preedit_offset_x">悬浮编码区水平偏移（向右为正）</string>
     <string name="floating_preedit_offset_y">悬浮编码区垂直偏移（向下为正）</string>
     <string name="floating_keyboard_drag_handle">拖动悬浮键盘，双击恢复默认位置</string>
+    <string name="floating_keyboard_resize_handle">拖动以调整悬浮键盘大小</string>
     <string name="enable_floating_keyboard">切换到悬浮键盘</string>
     <string name="dock_keyboard">停靠键盘</string>
+    <string name="show_input_bar">显示输入工具栏</string>
     <string name="setup__step_three">第 3 步</string>
     <string name="setup__select_data_path_hint">选择<b>同文输入法</b>如何存储 Rime 数据</string>
     <string name="setup__select_data_path">选择外部数据目录…</string>

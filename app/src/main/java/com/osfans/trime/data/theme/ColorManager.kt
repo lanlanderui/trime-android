@@ -44,6 +44,18 @@ object ColorManager {
     val activeColorScheme: ColorScheme
         get() = requireNotNull(requireScope().activeColorScheme) { "ColorManager is not initialized" }
 
+    /**
+     * Everything the user can pick between: the theme's presets plus the built-in system dynamic
+     * scheme.
+     *
+     * The dynamic scheme is not a preset, so it has to be appended here — that is what keeps it
+     * in the list no matter what a theme's `preset_color_schemes` declares. It deliberately sorts
+     * last, and a preset that happens to use its reserved id is dropped, so a theme can neither
+     * hide it nor shadow it.
+     */
+    val availableColorSchemes: List<ColorScheme>
+        get() = selectableSchemes(requireScope().theme)
+
     private var bitmapCache: LruCache<String, Bitmap>? = null
 
     private var generation = 0L
@@ -113,8 +125,20 @@ object ColorManager {
 
     private fun requireScope(): ThemeScope = requireNotNull(scope) { "ColorManager is not initialized" }
 
+    /**
+     * The theme's presets with the dynamic scheme appended, in selection order. The dynamic
+     * scheme has to be part of this list and not just of the picker: an id is only resolvable
+     * against the schemes handed to [ColorSchemeResolver], so leaving it out would silently
+     * resolve a persisted [DynamicColorScheme.ID] back to the theme default.
+     */
+    private fun selectableSchemes(theme: Theme): List<ColorScheme> =
+        ColorSchemeResolver.selectable(
+            presets = theme.colorSchemes,
+            dynamic = if (DynamicColorScheme.isSupported) DynamicColorScheme.create(isNightMode) else null,
+        )
+
     private fun resolveActiveScheme(theme: Theme): ColorScheme = ColorSchemeResolver.resolve(
-        schemes = theme.colorSchemes,
+        schemes = selectableSchemes(theme),
         selectedSchemeId = prefs.normalModeColor.getValue(),
         followSystemDayNight = prefs.followSystemDayNight.getValue(),
         isNightMode = isNightMode,

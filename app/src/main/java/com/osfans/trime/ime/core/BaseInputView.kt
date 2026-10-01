@@ -9,7 +9,6 @@ import android.annotation.SuppressLint
 import android.content.res.Resources
 import android.view.View
 import android.view.WindowInsets
-import android.widget.PopupMenu
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.text.bold
 import androidx.core.text.buildSpannedString
@@ -25,6 +24,7 @@ import com.osfans.trime.data.theme.ThemeManager
 import com.osfans.trime.data.theme.ThemePrefs
 import com.osfans.trime.data.theme.ThemeScope
 import com.osfans.trime.ime.keyboard.InputFeedbackManager
+import com.osfans.trime.util.ImePopupMenu
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import splitties.dimensions.dp
@@ -68,7 +68,7 @@ abstract class BaseInputView(
 
     val themedContext = context.withTheme(android.R.style.Theme_DeviceDefault_Settings)
 
-    private var candidateActionMenu: PopupMenu? = null
+    private var candidateActionMenu: ImePopupMenu? = null
 
     fun showCandidateActionMenu(idx: Int, text: String, view: View, global: Boolean) {
         candidateActionMenu?.dismiss()
@@ -82,19 +82,14 @@ abstract class BaseInputView(
         service.lifecycleScope.launch {
             InputFeedbackManager.keyPressVibrate(view, longPress = true)
             candidateActionMenu =
-                PopupMenu(themedContext, view).apply {
-                    menu.add(title).apply {
-                        isEnabled = false
-                    }
-                    menu.add(R.string.forget_this_word).setOnMenuItemClickListener {
+                ImePopupMenu(view)
+                    .item(title, enabled = false)
+                    .item(R.string.forget_this_word) {
                         rime.runIfReady { deleteCandidate(idx, global) }
-                        true
+                    }.apply {
+                        onDismiss = { if (this === candidateActionMenu) candidateActionMenu = null }
+                        show()
                     }
-                    setOnDismissListener {
-                        candidateActionMenu = null
-                    }
-                    show()
-                }
         }
     }
 

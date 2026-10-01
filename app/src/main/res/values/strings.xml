@@ -23,6 +23,7 @@
     <string name="selected_theme_summary">Select desired theme</string>
     <string name="normal_mode_color">Colors</string>
     <string name="normal_mode_color_summary">Select desired color</string>
+    <string name="dynamic_color_scheme">Dynamic color</string>
     <string name="reset">Reset</string>
     <string name="reset_hint">Overwrite the same files in shared directory with default built-in assets</string>
     <string name="sound_on_keypress">Sound on key press</string>
@@ -153,14 +154,16 @@
     <string name="enable_landscape_mode">Enable Landscape Mode</string>
     <string name="split_space_percent">Auto Split Keyboard Space Ratio</string>
     <string name="floating_keyboard">Floating keyboard</string>
-    <string name="floating_keyboard_summary">Show the keyboard as a movable card. Use the toolbar button to switch modes, drag the top handle to move it, or double-tap the handle to reset its position.</string>
+    <string name="floating_keyboard_summary">Show the keyboard as a movable card. Drag the bottom-left grip or use two fingers to move it, double-tap the grip to reset its position, and drag the bottom-right corner to resize it.</string>
     <string name="floating_keyboard_width">Floating keyboard width</string>
     <string name="floating_keyboard_height">Floating keyboard height</string>
     <string name="floating_preedit_offset_x">Floating preedit horizontal offset (right is positive)</string>
     <string name="floating_preedit_offset_y">Floating preedit vertical offset (down is positive)</string>
     <string name="floating_keyboard_drag_handle">Drag floating keyboard; double-tap to reset position</string>
+    <string name="floating_keyboard_resize_handle">Drag to resize floating keyboard</string>
     <string name="enable_floating_keyboard">Switch to floating keyboard</string>
     <string name="dock_keyboard">Dock keyboard</string>
+    <string name="show_input_bar">Show input bar</string>
     <string name="setup__step_three">Setup 3</string>
     <string name="setup__select_data_path_hint">Choose how <b>Trime</b> stores Rime data</string>
     <string name="setup__select_data_path">Select external data directory…</string>

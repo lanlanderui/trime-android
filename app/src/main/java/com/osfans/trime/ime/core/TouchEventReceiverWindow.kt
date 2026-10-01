@@ -31,6 +31,14 @@ class TouchEventReceiverWindow(
 
     private val cachedLocation = intArrayOf(0, 0)
 
+    // Geometry last pushed to the popup. [showAt] is called from the floating keyboard's
+    // per-keystroke position sync, and moving the popup costs a window manager transaction,
+    // so an unchanged geometry must not reach the window manager at all.
+    private var lastX = Int.MIN_VALUE
+    private var lastY = Int.MIN_VALUE
+    private var lastWidth = 0
+    private var lastHeight = 0
+
     fun showAt(
         x: Int,
         y: Int,
@@ -39,12 +47,17 @@ class TouchEventReceiverWindow(
     ) {
         isWindowShowing = true
         if (window.isShowing) {
+            if (x == lastX && y == lastY && w == lastWidth && h == lastHeight) return
             window.update(x, y, w, h)
         } else {
             window.width = w
             window.height = h
             window.showAtLocation(contentView, Gravity.TOP or Gravity.START, x, y)
         }
+        lastX = x
+        lastY = y
+        lastWidth = w
+        lastHeight = h
     }
 
     fun show() {
@@ -59,5 +72,8 @@ class TouchEventReceiverWindow(
             isWindowShowing = false
             window.dismiss()
         }
+        // Force the next show to re-apply its geometry even if it matches the cached one.
+        lastX = Int.MIN_VALUE
+        lastY = Int.MIN_VALUE
     }
 }

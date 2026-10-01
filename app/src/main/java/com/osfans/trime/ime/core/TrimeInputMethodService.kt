@@ -33,6 +33,7 @@ import android.widget.FrameLayout
 import androidx.annotation.Keep
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import com.osfans.trime.core.KeyModifiers
@@ -116,9 +117,44 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
 
     @Keep
     private val recreateInputViewListener =
-        PreferenceDelegate.OnChangeListener<Any> { _, _ ->
-            themeScope?.let { replaceInputView(it) }
+        PreferenceDelegate.OnChangeListener<Any> { key, _ ->
+            if (updatingFloatingKeyboardSize) return@OnChangeListener
+            when (key) {
+                AppPrefs.Keyboard.FLOATING_KEYBOARD -> {
+                    val enabled = prefs.keyboard.floatingKeyboard.getValue()
+                    inputView?.setFloatingKeyboardEnabled(enabled)
+                        ?: themeScope?.let { replaceInputView(it) }
+                }
+
+                AppPrefs.Keyboard.HIDE_INPUT_BAR -> {
+                    if (inputView != null) {
+                        inputView?.refreshHideInputBar()
+                    } else {
+                        themeScope?.let { replaceInputView(it) }
+                    }
+                }
+
+                else -> themeScope?.let { replaceInputView(it) }
+            }
         }
+
+    private var updatingFloatingKeyboardSize = false
+
+    /** Save both dimensions without rebuilding the currently scaled keyboard view. */
+    fun updateFloatingKeyboardSize(widthPercent: Int, heightPercent: Int) {
+        val widthPref = prefs.keyboard.floatingKeyboardWidth
+        val heightPref = prefs.keyboard.floatingKeyboardHeight
+        if (widthPref.getValue() == widthPercent && heightPref.getValue() == heightPercent) return
+        updatingFloatingKeyboardSize = true
+        try {
+            widthPref.sharedPreferences.edit {
+                putInt(widthPref.key, widthPercent)
+                putInt(heightPref.key, heightPercent)
+            }
+        } finally {
+            updatingFloatingKeyboardSize = false
+        }
+    }
 
     @Keep
     private val recreateCandidatesViewListener =
@@ -336,8 +372,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         InputFeedbackManager.destroy()
         // The dialog borrows this service's window token, so leaving it up while
         // the service goes away leaks the window.
-        showingDialog?.dismiss()
-        showingDialog = null
+        dismissShowingDialog()
         inputView = null
         recreateInputViewPrefs.forEach {
             it.unregisterOnChangeListener(recreateInputViewListener)
@@ -630,6 +665,8 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
 
     override fun onFinishInputView(finishingInput: Boolean) {
         Timber.d("onFinishInputView: finishingInput=$finishingInput")
+        // A picker is only drawn while the keyboard is up, so it has to go with it.
+        dismissShowingDialog()
         decorLocationUpdated = false
         inputView?.dismissCandidateActionMenu()
         candidatesView?.dismissCandidateActionMenu()
@@ -1049,15 +1086,41 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
 
     private var showingDialog: Dialog? = null
 
+    /**
+     * Shows one of the theme / colour / sound / schema pickers.
+     *
+     * The dialog has to borrow this service's window token, otherwise a window owned by a service
+     * cannot be added at all. That makes it a *child* of the input method window: it is drawn just
+     * above the keyboard and it goes down together with it. That coupling is why the dialog must
+     * not be focusable.
+     *
+     * A focusable dialog pulls the window focus away from the editor, so the framework stops the
+     * input method — and a child of a stopped input method window never gets a surface, it stays
+     * in `DRAW_PENDING`. The user taps a picker key, the keyboard disappears and nothing is shown;
+     * the picker only appears once the editor is focused again and the keyboard comes back.
+     *
+     * `FLAG_NOT_FOCUSABLE` keeps the editor focused instead, so the keyboard stays up, the picker
+     * is drawn above it, and `FLAG_DIM_BEHIND` dims everything behind. Keeping the keyboard alive
+     * is what the pickers want anyway: they exist to try out a theme while typing. They are
+     * touch-modal and all of them carry a cancel button, so nothing here needs key input.
+     *
+     * (`FLAG_ALT_FOCUSABLE_IM` was the old flag. It is the documented way to put a dialog over the
+     * keyboard for an *activity*, but for an input method it does the opposite of what is needed:
+     * by blocking every view below it from connecting to the input method, it makes the framework
+     * stop the very keyboard the dialog is a child of.)
+     */
     fun showDialog(dialog: Dialog) {
         showingDialog?.dismiss()
+        // The keyboard stays up behind the picker, so a tap outside it (a keyboard key, say) has to
+        // close the picker rather than be silently swallowed by it.
+        dialog.setCanceledOnTouchOutside(true)
         dialog.window?.also {
             it.attributes.apply {
                 token = decorView.windowToken
                 type = WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG
             }
             it.addFlags(
-                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or WindowManager.LayoutParams.FLAG_DIM_BEHIND,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_DIM_BEHIND,
             )
             it.setDimAmount(styledFloat(android.R.attr.backgroundDimAmount))
         }
@@ -1066,5 +1129,17 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         }
         dialog.show()
         showingDialog = dialog
+    }
+
+    /**
+     * Dismisses a picker that is still up.
+     *
+     * The picker is a child of the input method window, so it is only drawn while the keyboard is
+     * up. Left alive it would stay invisible and then pop back on screen the next time the keyboard
+     * is shown, so it has to go as soon as the keyboard goes.
+     */
+    private fun dismissShowingDialog() {
+        showingDialog?.dismiss()
+        showingDialog = null
     }
 }
