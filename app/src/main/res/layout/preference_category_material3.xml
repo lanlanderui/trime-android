@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+SPDX-FileCopyrightText: 2026 Rime community
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
+<TextView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="8dp"
+    android:layout_marginTop="20dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginBottom="4dp"
+    android:paddingStart="16dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="16dp"
+    android:paddingBottom="8dp"
+    android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
+    android:textColor="?attr/colorPrimary" />

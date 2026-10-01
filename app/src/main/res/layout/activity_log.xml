@@ -11,6 +11,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
     android:orientation="vertical"
     tools:context=".ui.main.LogActivity">
 
@@ -36,34 +37,38 @@ SPDX-License-Identifier: GPL-3.0-or-later
         android:layout_height="wrap_content"
         android:gravity="center_horizontal"
         android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/clearButton"
-            style="?android:attr/buttonBarButtonStyle"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/clear" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/exportButton"
-            style="?android:attr/buttonBarButtonStyle"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/export" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/copyButton"
-            style="?android:attr/buttonBarButtonStyle"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@android:string/copy" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/jumpToBottomButton"
-            style="?android:attr/buttonBarButtonStyle"
+            style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/scroll_to_bottom" />

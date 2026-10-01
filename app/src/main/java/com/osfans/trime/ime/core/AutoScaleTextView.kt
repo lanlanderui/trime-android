@@ -72,7 +72,10 @@ constructor(
         }
     }
 
-    override fun getText(): CharSequence = text
+    // setText can be called from the super constructor, so the backing field may
+    // still be unset when the framework reads the text back.
+    override fun getText(): CharSequence = if (::text.isInitialized) text else ""
+
 
     override fun onMeasure(
         widthMeasureSpec: Int,

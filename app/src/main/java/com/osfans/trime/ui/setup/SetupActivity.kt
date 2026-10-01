@@ -25,6 +25,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import com.osfans.trime.R
+import com.osfans.trime.daemon.RimeDaemon
 import com.osfans.trime.data.sync.RimeDataSync
 import com.osfans.trime.databinding.ActivitySetupBinding
 import com.osfans.trime.ui.main.MainActivity
@@ -54,6 +55,7 @@ class SetupActivity : FragmentActivity() {
                     withContext(Dispatchers.IO) {
                         RimeDataSync.persistTreeUri(this@SetupActivity, uri)
                         RimeDataSync.importToLocal(this@SetupActivity).getOrThrow()
+                        RimeDaemon.retryStartup()
                     }
                     refreshCurrentFragment()
                     updateButtons()

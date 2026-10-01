@@ -161,4 +161,24 @@ class KeyActionTest :
                 }
             }
         }
+        given("a preset bound to a trime command") {
+            `when`("it declares a command but no send value") {
+                then("it degrades to a function key so the command listener receives it") {
+                    listOf(
+                        "switch_floating_keyboard",
+                        "switch_hide_input_bar",
+                        "switch_hide_key_symbol",
+                        "switch_hide_key_hint",
+                    ).forEach { command ->
+                        val action =
+                            KeyAction(
+                                KeyActionToken.Plain("bound"),
+                                mapOf("bound" to PresetKey(label = "bound", command = command)),
+                            )
+                        action.command shouldBe command
+                        action.code shouldBe KeyEvent.KEYCODE_FUNCTION
+                    }
+                }
+            }
+        }
     })

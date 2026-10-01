@@ -4,12 +4,13 @@
 
 package com.osfans.trime.ui.main.settings
 
-import android.app.AlertDialog
 import android.content.Context
+import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.LifecycleCoroutineScope
 import com.osfans.trime.R
 import com.osfans.trime.data.theme.ColorManager
 import com.osfans.trime.data.theme.ThemeManager
+import com.osfans.trime.ui.common.materialAlertDialogBuilder
 import kotlinx.coroutines.launch
 
 object ColorPickerDialog {
@@ -21,8 +22,7 @@ object ColorPickerDialog {
         val presetSchemes = ThemeManager.activeTheme.colorSchemes
         val currentScheme = ColorManager.activeColorScheme
         val currentIndex = presetSchemes.indexOfFirst { it.id == currentScheme.id }
-        return AlertDialog
-            .Builder(context)
+        return context.materialAlertDialogBuilder()
             .apply {
                 setTitle(R.string.normal_mode_color)
                 if (presetSchemes.isEmpty()) {

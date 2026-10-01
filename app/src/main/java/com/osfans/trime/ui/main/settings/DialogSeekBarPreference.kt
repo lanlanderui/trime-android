@@ -8,26 +8,25 @@ package com.osfans.trime.ui.main.settings
 import android.content.Context
 import android.content.res.TypedArray
 import android.util.AttributeSet
-import android.widget.SeekBar
-import androidx.appcompat.app.AlertDialog
+import androidx.core.widget.TextViewCompat
 import androidx.preference.DialogPreference
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.slider.Slider
 import com.osfans.trime.R
 import splitties.dimensions.dp
-import splitties.resources.resolveThemeAttribute
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.horizontalMargin
 import splitties.views.dsl.core.lParams
 import splitties.views.dsl.core.matchParent
-import splitties.views.dsl.core.seekBar
 import splitties.views.dsl.core.textView
 import splitties.views.dsl.core.verticalLayout
 import splitties.views.dsl.core.verticalMargin
+import splitties.views.dsl.core.view
 import splitties.views.gravityHorizontalCenter
-import splitties.views.textAppearance
 
 /**
- * Custom preference which represents a seek bar which shows the current value in the summary. The
- * value can be changed by clicking on the preference, which brings up a dialog which a seek bar.
+ * Custom preference which represents a slider and shows the current value in the summary. The
+ * value can be changed by clicking on the preference, which brings up a Material 3 slider dialog.
  * This implementation also allows for a min / max step value, while being backwards compatible.
  *
  * @see R.styleable.DialogSeekBarPreferenceAttrs for which xml attributes this preference accepts
@@ -112,29 +111,24 @@ class DialogSeekBarPreference : DialogPreference {
     private fun showSeekBarDialog() = with(context) {
         val textView = textView {
             text = getTextForValue(value)
-            textAppearance = resolveThemeAttribute(android.R.attr.textAppearanceListItem)
+            TextViewCompat.setTextAppearance(this, com.google.android.material.R.style.TextAppearance_Material3_TitleLarge)
         }
-        val seekBar = seekBar {
-            max = getProgressForValue(this@DialogSeekBarPreference.max)
-            progress = getProgressForValue(value)
-            setOnSeekBarChangeListener(
-                object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(
-                        seekBar: SeekBar?,
-                        progress: Int,
-                        fromUser: Boolean,
-                    ) {
-                        textView.text = getTextForValue(getValueForProgress(progress))
-                    }
-                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-                },
-            )
+        val slider = view(::Slider) {
+            valueFrom = 0f
+            valueTo = getProgressForValue(this@DialogSeekBarPreference.max).toFloat()
+            stepSize = 1f
+            value = getProgressForValue(this@DialogSeekBarPreference.value).toFloat()
+            addOnChangeListener { _, sliderValue, _ ->
+                textView.text = getTextForValue(getValueForProgress(sliderValue.toInt()))
+            }
         }
         val dialogView = verticalLayout {
             gravity = gravityHorizontalCenter
             if (dialogMessage != null) {
-                val messageText = textView { text = dialogMessage }
+                val messageText = textView {
+                    text = dialogMessage
+                    TextViewCompat.setTextAppearance(this, com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+                }
                 add(
                     messageText,
                     lParams {
@@ -150,20 +144,19 @@ class DialogSeekBarPreference : DialogPreference {
                 },
             )
             add(
-                seekBar,
+                slider,
                 lParams {
                     width = matchParent
-                    horizontalMargin = dp(10)
-                    bottomMargin = dp(10)
+                    horizontalMargin = dp(16)
+                    bottomMargin = dp(12)
                 },
             )
         }
-        AlertDialog
-            .Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle(this@DialogSeekBarPreference.title)
             .setView(dialogView)
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                val actualValue = getValueForProgress(seekBar.progress)
+                val actualValue = getValueForProgress(slider.value.toInt())
                 if (callChangeListener(actualValue)) {
                     persistInt(actualValue)
                     notifyChanged()

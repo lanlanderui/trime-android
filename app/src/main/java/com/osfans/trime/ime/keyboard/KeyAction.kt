@@ -60,7 +60,7 @@ class KeyAction(
                 "click" -> true
 
                 // 点击锁定
-                "ascii_long" -> !rime.run { statusCached }.isAsciiMode
+                "ascii_long" -> !rime.status.isAsciiMode
 
                 // 英文长按锁定，中文点击锁定
                 else -> false
@@ -78,6 +78,17 @@ class KeyAction(
     private var preview: String? = null
     private var states: List<String> = listOf()
 
+    /**
+     * Cached value of the runtime option named by [toggle].
+     *
+     * Reading it through rime reaches rime's own thread and blocks the caller,
+     * so it must never happen while drawing a key. The value is refreshed by
+     * [refreshToggleState] whenever a keyboard becomes active, and kept in sync
+     * by [updateToggleState] from rime's option messages.
+     */
+    @Volatile
+    private var toggleState = false
+
     // Resolved on first read, since the preference store needs the app context.
     private val hookShiftNum: Boolean by LazyPreferenceDelegate {
         AppPrefs.defaultInstance().keyboard.hookShiftNum
@@ -89,10 +100,11 @@ class KeyAction(
     private val rime get() = RimeDaemon.getFirstSessionOrNull()!!
 
     // 获取空格键的schemaName，处理初始化时可能为空的情况
-    private fun getSpaceKeySchemaName(): String = rime.run {
-        statusCached.schemaName.ifEmpty {
+    private fun getSpaceKeySchemaName(): String {
+        val status = rime.status
+        return status.schemaName.ifEmpty {
             // 如果schemaName为空，尝试使用schemaId作为显示名称
-            schemaCached.schemaId.takeIf { it.isNotEmpty() && it != ".default" } ?: ""
+            rime.schema.schemaId.takeIf { it.isNotEmpty() && it != ".default" } ?: ""
         }
     }
 
@@ -123,7 +135,7 @@ class KeyAction(
         str: String,
         keyboard: Keyboard,
     ): String {
-        val status = rime.run { statusCached }
+        val status = rime.status
         return if (str.length == 1 && (keyboard.isShifted || (!status.isAsciiMode && keyboard.isLabelUppercase))) {
             str.uppercase()
         } else {
@@ -134,11 +146,12 @@ class KeyAction(
     fun getLabel(keyboard: Keyboard): String {
         ensureLabels()
         if (states.isNotEmpty() && toggle.isNotEmpty()) {
-            return states[if (rime.run { getRuntimeOption(toggle) }) 1 else 0]
+            return states.getOrElse(if (toggleState) 1 else 0) { states.first() }
         }
         if (keyboard.isOnlyShiftOn) {
-            val asciiMode = rime.run { statusCached }.isAsciiMode
-            val composing = rime.run { statusCached }.isComposing
+            val status = rime.status
+            val asciiMode = status.isAsciiMode
+            val composing = status.isComposing
             if (!hookShiftNum && !composing && code in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9) {
                 return adjustCase(shiftLabel, keyboard)
             }
@@ -164,13 +177,37 @@ class KeyAction(
         return if (text.isNotEmpty()) {
             adjustCase(text, keyboard)
         } else if (keyboard.isShifted && code in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z && modifier == 0) {
-            if (rime.run { statusCached.isAsciiMode }) "" else adjustCase(label, keyboard)
+            if (rime.status.isAsciiMode) "" else adjustCase(label, keyboard)
         } else {
             text
         }
     }
 
     fun getPreview(keyboard: Keyboard): String = preview ?: getLabel(keyboard)
+
+    /**
+     * Re-reads the [toggle] runtime option from rime.
+     *
+     * This reaches rime's thread and blocks the caller, so it must only be used
+     * when a keyboard is (re)built -- never from the draw path.
+     */
+    fun refreshToggleState() {
+        if (toggle.isEmpty()) return
+        // Reaching rime throws when it is not running (or its session is gone).
+        // Unlike a cached-field read, this call has to go through the dispatcher,
+        // so keep the last known value instead of taking the keyboard down.
+        toggleState = runCatching { rime.run { getRuntimeOption(toggle) } }.getOrDefault(toggleState)
+    }
+
+    /** Applies an option change reported by rime, without querying the native layer. */
+    fun updateToggleState(
+        option: String,
+        value: Boolean,
+    ) {
+        if (toggle.isNotEmpty() && option == toggle) {
+            toggleState = value
+        }
+    }
 
     init {
         when (token) {

@@ -18,6 +18,7 @@ import android.view.Window
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import androidx.annotation.AttrRes
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.core.view.WindowCompat
@@ -26,10 +27,10 @@ import androidx.core.view.isVisible
 import androidx.core.view.setPadding
 import androidx.core.widget.TextViewCompat
 import androidx.core.widget.doAfterTextChanged
+import com.google.android.material.color.MaterialColors
 import com.osfans.trime.R
 import splitties.dimensions.dp
 import splitties.resources.drawable
-import splitties.resources.styledColor
 import splitties.resources.styledDrawable
 import splitties.systemservices.inputMethodManager
 import splitties.views.dsl.constraintlayout.after
@@ -67,6 +68,9 @@ constructor(
     defStyleAttr: Int = 0,
 ) : LinearLayout(context, attrs, defStyleAttr) {
 
+    private fun themeColor(@AttrRes attribute: Int): Int =
+        MaterialColors.getColor(this, attribute)
+
     data class InputTypeOption(
         @StringRes val label: Int,
         @StringRes val hint: Int,
@@ -85,14 +89,14 @@ constructor(
                 addState(
                     intArrayOf(android.R.attr.state_selected),
                     GradientDrawable().apply {
-                        setColor(styledColor(android.R.attr.colorControlHighlight))
+                        setColor(themeColor(android.R.attr.colorControlHighlight))
                         cornerRadius = dp(6f)
                     },
                 )
                 addState(
                     intArrayOf(),
                     GradientDrawable().apply {
-                        setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                        setStroke(dp(1), themeColor(android.R.attr.colorControlNormal))
                         cornerRadius = dp(6f)
                     },
                 )
@@ -153,7 +157,7 @@ constructor(
         add(
             imageView {
                 imageDrawable = drawable(R.drawable.ic_input_box)!!.apply {
-                    setTint(styledColor(android.R.attr.colorControlNormal))
+                    setTint(themeColor(android.R.attr.colorControlNormal))
                 }
             },
             lParams(dp(20), dp(20)) {
@@ -166,7 +170,7 @@ constructor(
                 textSize = 18f
                 typeface = Typeface.DEFAULT_BOLD
                 setText(R.string.test_input)
-                setTextColor(styledColor(android.R.attr.textColorPrimary))
+                setTextColor(themeColor(android.R.attr.textColorPrimary))
             },
             lParams(0, wrapContent, weight = 1f) {
                 gravity = gravityVerticalCenter
@@ -177,7 +181,7 @@ constructor(
             imageButton {
                 background = styledDrawable(android.R.attr.selectableItemBackgroundBorderless)
                 imageDrawable = drawable(R.drawable.ic_outline_cancel_24)!!.apply {
-                    setTint(styledColor(android.R.attr.colorControlNormal))
+                    setTint(themeColor(android.R.attr.colorControlNormal))
                 }
                 setPaddingDp(6)
                 setOnClickListener { dismiss() }
@@ -193,14 +197,14 @@ constructor(
             addState(
                 intArrayOf(android.R.attr.state_focused),
                 GradientDrawable().apply {
-                    setStroke(dp(2), styledColor(android.R.attr.colorAccent))
+                    setStroke(dp(2), themeColor(android.R.attr.colorAccent))
                     cornerRadius = dp(6f)
                 },
             )
             addState(
                 intArrayOf(),
                 GradientDrawable().apply {
-                    setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                    setStroke(dp(1), themeColor(android.R.attr.colorControlNormal))
                     cornerRadius = dp(6f)
                 },
             )
@@ -224,7 +228,7 @@ constructor(
     private val clearButton: ImageButton = imageButton {
         background = styledDrawable(android.R.attr.selectableItemBackgroundBorderless)
         imageDrawable = drawable(R.drawable.ic_outline_cancel_24)!!.apply {
-            setTint(styledColor(android.R.attr.colorControlNormal))
+            setTint(themeColor(android.R.attr.colorControlNormal))
         }
         setPadding(dp(8))
         isVisible = false
@@ -274,7 +278,12 @@ constructor(
         background = GradientDrawable().apply {
             val r = dp(8f)
             cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
-            setColor(styledColor(android.R.attr.colorBackground))
+            setColor(
+                MaterialColors.getColor(
+                    this@TestInputPanel,
+                    com.google.android.material.R.attr.colorSurface,
+                ),
+            )
         }
         add(
             header,
@@ -333,7 +342,7 @@ constructor(
         @DrawableRes iconRes: Int,
     ) {
         val icon = drawable(iconRes)!!.apply {
-            setTint(styledColor(android.R.attr.textColorSecondary))
+            setTint(themeColor(android.R.attr.textColorSecondary))
         }
         input.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, null, null, null)
         input.compoundDrawablePadding = dp(8)

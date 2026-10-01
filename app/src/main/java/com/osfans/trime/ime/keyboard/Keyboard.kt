@@ -109,7 +109,14 @@ class Keyboard(
                 theme.generalStyle.keyboardHeightLand,
                 context.isLandscapeMode(),
             ),
-        ) { context.dp(it) }
+        ) { context.dp(it) }.let { resolvedHeight ->
+            val keyboardPrefs = AppPrefs.defaultInstance().keyboard
+            if (keyboardPrefs.floatingKeyboard.getValue()) {
+                (resolvedHeight * keyboardPrefs.floatingKeyboardHeight.getValue() / 100f).toInt()
+            } else {
+                resolvedHeight
+            }
+        }
 
     private val expandKeypressArea: Boolean by AppPrefs.defaultInstance().keyboard.expandKeypressArea
 
@@ -345,6 +352,20 @@ class Keyboard(
 
     val keys: List<Key>
         get() = mKeys
+
+    /**
+     * Re-reads the runtime options toggled by the keys of this keyboard.
+     *
+     * Blocks until rime answers, so it belongs to keyboard (re)activation, not
+     * to the draw path.
+     */
+    fun refreshToggleStates() = keys.forEach { it.refreshToggleStates() }
+
+    /** Forwards an option change reported by rime to every key. */
+    fun updateToggleState(
+        option: String,
+        value: Boolean,
+    ) = keys.forEach { it.updateToggleState(option, value) }
 
     private fun setModifier(
         mask: Int,

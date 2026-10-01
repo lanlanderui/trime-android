@@ -376,6 +376,20 @@ class KeyView(
         icon.draw(canvas)
     }
 
+    // Splitting the label allocates a list plus strings, and this runs for every
+    // symbol/hint key on every frame. Keyed by the source string, so a label
+    // change (key mode, schema name) simply invalidates it.
+    private var symbolLinesSource: String? = null
+    private var symbolLinesCache: List<String> = emptyList()
+
+    private fun symbolLinesOf(text: String): List<String> {
+        if (symbolLinesSource != text) {
+            symbolLinesSource = text
+            symbolLinesCache = text.split("\n")
+        }
+        return symbolLinesCache
+    }
+
     private fun drawSymbol(canvas: Canvas, text: String, isTop: Boolean = true) {
         if (isTop && keyboardView.hideKeySymbol) return
         if (!isTop && keyboardView.hideKeyHint) return
@@ -394,7 +408,7 @@ class KeyView(
                 typeface = FontManager.getTypeface("symbol_font")
             }
 
-            val lines = text.split("\n")
+            val lines = symbolLinesOf(text)
             val fontMetrics = symbolPaint.fontMetrics
             val lineHeight = fontMetrics.descent - fontMetrics.ascent
             val totalHeight = lineHeight * lines.size

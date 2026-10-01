@@ -5,14 +5,19 @@
 package com.osfans.trime.daemon
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.osfans.trime.R
 import com.osfans.trime.TrimeApplication
+import com.osfans.trime.core.CompositionProto
 import com.osfans.trime.core.Rime
 import com.osfans.trime.core.RimeApi
 import com.osfans.trime.core.RimeLifecycle
 import com.osfans.trime.core.RimeMessage
+import com.osfans.trime.core.RimeSchema
+import com.osfans.trime.core.StatusProto
 import com.osfans.trime.core.lifecycleScope
 import com.osfans.trime.core.whenReady
 import com.osfans.trime.data.sync.RimeDataSync
@@ -32,6 +37,7 @@ import splitties.systemservices.notificationManager
 import timber.log.Timber
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Manage the singleton instance of [Rime]
@@ -50,6 +56,7 @@ import kotlin.concurrent.withLock
 object RimeDaemon {
     private const val STARTUP_RETRY_DELAY_MS = 1_000L
     private const val STARTUP_RETRY_MAX_ATTEMPTS = 30
+    private val DEPLOY_WAKE_LOCK_TIMEOUT = 20.minutes
 
     private val realRime by lazy { Rime() }
 
@@ -59,15 +66,64 @@ object RimeDaemon {
 
     private val lock = ReentrantLock()
 
+    /**
+     * Lock-free snapshots of [sessions], republished whenever the map changes.
+     *
+     * Callers that only need "some session" or "is this session still
+     * established" read these instead of touching the mutable map: the keyboard
+     * asks on every draw, and iterating a HashMap while another thread runs put
+     * or remove is not safe.
+     */
+    @Volatile
+    private var cachedSession: RimeSession? = null
+
+    @Volatile
+    private var establishedNames: Set<String> = emptySet()
+
+    /** Republishes the snapshots above. Call while holding [lock]. */
+    private fun publishSessionsLocked() {
+        cachedSession = sessions.firstNotNullOfOrNull { it.value }
+        establishedNames = sessions.keys.toSet()
+    }
+
     @Volatile
     private var startupRetryJob: Job? = null
 
+    private val deployWakeLock: PowerManager.WakeLock by lazy {
+        (appContext.getSystemService(Context.POWER_SERVICE) as PowerManager)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Trime:RimeDeploy")
+            .apply { setReferenceCounted(false) }
+    }
+
+    private fun acquireDeployWakeLock() {
+        if (deployWakeLock.isHeld) deployWakeLock.release()
+        deployWakeLock.acquire(DEPLOY_WAKE_LOCK_TIMEOUT.inWholeMilliseconds)
+    }
+
+    private fun releaseDeployWakeLock() {
+        if (deployWakeLock.isHeld) deployWakeLock.release()
+    }
+
     private fun establish(name: String) = object : RimeSession {
-        private inline fun <T> ensureEstablished(block: () -> T) = if (name in sessions) {
+        private inline fun <T> ensureEstablished(block: () -> T) = if (name in establishedNames) {
             block()
         } else {
             throw IllegalStateException("Session $name is not established")
         }
+
+        // Cached state: plain field reads, so they neither block nor reach the
+        // native layer. Deliberately not gated by ensureEstablished() -- reading
+        // a stale snapshot is harmless and keeps UI hot paths lock-free.
+        override val status: StatusProto
+            get() = rimeImpl.statusCached
+        override val paging: Boolean
+            get() = rimeImpl.paging
+        override val hasMenu: Boolean
+            get() = rimeImpl.hasMenu
+        override val composition: CompositionProto
+            get() = rimeImpl.compositionCached
+        override val schema: RimeSchema
+            get() = rimeImpl.schemaCached
 
         override fun <T> run(block: suspend RimeApi.() -> T): T = ensureEstablished {
             runBlocking { block(rimeImpl) }
@@ -134,6 +190,7 @@ object RimeDaemon {
         }
         val session = establish(name)
         sessions[name] = session
+        publishSessionsLocked()
         return@withLock session
     }
 
@@ -142,17 +199,32 @@ object RimeDaemon {
             return
         }
         sessions -= name
+        publishSessionsLocked()
         if (sessions.isEmpty()) {
             startupRetryJob?.cancel()
             startupRetryJob = null
             realRime.finalize()
+            releaseDeployWakeLock()
+        }
+    }
+
+    /** Immediately retries startup after the user restores storage access. */
+    fun retryStartup() = lock.withLock {
+        if (sessions.isEmpty()) return@withLock
+        startupRetryJob?.cancel()
+        startupRetryJob = null
+        if (!tryStartRimeLocked()) {
+            scheduleStartupRetry()
         }
     }
 
     /**
-     * Reuse a session for remote service
+     * Reuse a session for remote service.
+     *
+     * Reads a lock-free snapshot rather than the session map: this is called
+     * from the keyboard draw path.
      */
-    fun getFirstSessionOrNull() = sessions.firstNotNullOfOrNull { it.value }
+    fun getFirstSessionOrNull(): RimeSession? = cachedSession
 
     private var restartId = 0
 
@@ -207,18 +279,21 @@ object RimeDaemon {
         if (it is RimeMessage.DeployMessage) {
             when (it.data) {
                 RimeMessage.DeployMessage.State.Start -> {
+                    acquireDeployWakeLock()
                     DeployNotification.showProgress()
                     withContext(Dispatchers.IO) { subprocess("logcat", "--clear") }
                 }
 
                 RimeMessage.DeployMessage.State.Success -> {
+                    releaseDeployWakeLock()
                     DeployNotification.showSuccess()
                 }
 
                 RimeMessage.DeployMessage.State.Failure -> {
+                    releaseDeployWakeLock()
                     val intent =
                         Intent(appContext, LogActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                             val log =
                                 subprocess("logcat", "-v", "brief", "-s", "rime.trime:W", "-d")
                                     .readText()
@@ -230,7 +305,7 @@ object RimeDaemon {
                             appContext,
                             0,
                             intent,
-                            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                         )
                     DeployNotification.showFailure(pendingIntent)
                 }

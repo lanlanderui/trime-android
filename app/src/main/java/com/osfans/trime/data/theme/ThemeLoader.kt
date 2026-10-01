@@ -253,7 +253,9 @@ object ThemeLoader {
 
     /** Whether this file really lives in [root]: `..` and absolute ids are escapes. */
     private fun File.isInside(root: File): Boolean = runCatching {
-        canonicalFile.toPath().startsWith(root.canonicalFile.toPath())
+        val rootPath = root.canonicalPath
+        val filePath = canonicalPath
+        filePath == rootPath || filePath.startsWith("$rootPath${File.separator}")
     }.getOrDefault(false)
 
     /**

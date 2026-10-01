@@ -8,50 +8,54 @@ package com.osfans.trime.ui.main.settings.schema
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.widget.TextViewCompat
+import com.google.android.material.checkbox.MaterialCheckBox
+import com.osfans.trime.R
 import splitties.dimensions.dp
-import splitties.resources.resolveThemeAttribute
+import splitties.resources.drawable
 import splitties.resources.styledColor
-import splitties.resources.styledDimenPxSize
-import splitties.views.backgroundColor
 import splitties.views.dsl.constraintlayout.after
 import splitties.views.dsl.constraintlayout.centerVertically
 import splitties.views.dsl.constraintlayout.constraintLayout
+import splitties.views.dsl.constraintlayout.endOfParent
 import splitties.views.dsl.constraintlayout.lParams
 import splitties.views.dsl.constraintlayout.matchConstraints
 import splitties.views.dsl.constraintlayout.startOfParent
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
-import splitties.views.dsl.core.checkBox
 import splitties.views.dsl.core.matchParent
 import splitties.views.dsl.core.textView
+import splitties.views.dsl.core.view
 import splitties.views.dsl.core.wrapContent
 import splitties.views.setPaddingDp
-import splitties.views.textAppearance
 
 class SchemaListEntryUi(
     override val ctx: Context,
 ) : Ui {
-    val checkBox = checkBox()
+    val checkBox = view(::MaterialCheckBox)
     val nameText =
         textView {
             setPaddingDp(0, 16, 0, 16)
-            textAppearance = ctx.resolveThemeAttribute(android.R.attr.textAppearanceListItem)
+            TextViewCompat.setTextAppearance(this, com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
+            setTextColor(styledColor(com.google.android.material.R.attr.colorOnSurface))
         }
 
     override val root: View =
         constraintLayout {
-            layoutParams = ViewGroup.LayoutParams(matchParent, wrapContent)
-            backgroundColor = styledColor(android.R.attr.colorBackground)
-            minHeight = styledDimenPxSize(android.R.attr.listPreferredItemHeightSmall)
+            layoutParams =
+                ViewGroup.MarginLayoutParams(matchParent, wrapContent).apply {
+                    setMargins(0, dp(3), 0, dp(3))
+                }
+            background = drawable(R.drawable.bg_preference_item_material3)
+            minHeight = dp(72)
 
-            val paddingStart = styledDimenPxSize(android.R.attr.listPreferredItemPaddingStart)
             add(
                 checkBox,
                 lParams {
-                    width = dp(30)
+                    width = dp(48)
                     height = matchConstraints
                     centerVertically()
-                    startOfParent(paddingStart)
+                    startOfParent(dp(4))
                 },
             )
 
@@ -61,7 +65,8 @@ class SchemaListEntryUi(
                     width = matchConstraints
                     height = wrapContent
                     centerVertically()
-                    after(checkBox, paddingStart)
+                    after(checkBox, dp(8))
+                    endOfParent(dp(16))
                 },
             )
         }

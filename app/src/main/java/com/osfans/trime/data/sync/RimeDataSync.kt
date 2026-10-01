@@ -66,10 +66,11 @@ object RimeDataSync {
 
     fun isStorageChoiceDone(context: Context = appContext): Boolean {
         val profile = AppPrefs.defaultInstance().profile
+        val mode = profile.dataStorageMode.getValue()
         return isStorageChoiceComplete(
-            profile.dataStorageMode.getValue(),
+            mode,
             profile.externalRimeTreeUri.getValue(),
-        )
+        ) && (mode != DataStorageMode.EXTERNAL_SYNC || hasExternalAccess(context))
     }
 
     fun isStorageAvailable(context: Context = appContext): Boolean = isRuntimeReady() && (!usesExternalSync(context) || hasExternalAccess(context))
@@ -168,6 +169,14 @@ object RimeDataSync {
                         skipUserDb = skipUserDb,
                         skipPrefix = skipPrefix,
                     )
+                // Some vendor DocumentsProviders (observed on ColorOS tablets) accept
+                // a persisted tree grant but silently return an empty cursor for a
+                // populated directory. Treat that as unavailable storage. Continuing
+                // here would make OrphanCleaner erase the valid local mirror and the
+                // following Rime deployment would report every schema as missing.
+                check(files.isNotEmpty()) {
+                    "The selected Rime directory is empty or cannot be read"
+                }
                 val externalPaths = files.map { it.relativePath }.toSet()
                 val toCopy = files.filter { SyncPathPolicy.shouldImport(it.relativePath, ownId, syncDir) }
                 val createdDirs = LocalDirectoryGate()

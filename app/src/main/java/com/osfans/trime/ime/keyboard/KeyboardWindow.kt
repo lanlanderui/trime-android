@@ -41,6 +41,7 @@ import splitties.views.dsl.core.frameLayout
 import splitties.views.dsl.core.lParams
 import splitties.views.dsl.core.matchParent
 import timber.log.Timber
+import java.lang.ref.WeakReference
 
 class KeyboardWindow(di: DI) :
     BoardWindow.NoBarBoardWindow(di),
@@ -74,7 +75,13 @@ class KeyboardWindow(di: DI) :
     private lateinit var keyboardView: FrameLayout
 
     companion object : ResidentWindow.Key {
-        lateinit var currentKeyboard: Keyboard
+        private var currentKeyboardRef: WeakReference<Keyboard>? = null
+
+        var currentKeyboard: Keyboard
+            get() = currentKeyboardRef?.get() ?: error("No active keyboard")
+            private set(value) {
+                currentKeyboardRef = WeakReference(value)
+            }
     }
 
     override val key: ResidentWindow.Key
@@ -155,14 +162,8 @@ class KeyboardWindow(di: DI) :
         return width
     }
 
-    private fun selectKeyboardConfig(name: String): TextKeyboard? {
-        val config = theme.presetKeyboards[name] ?: theme.presetKeyboards["default"]
-        val importPreset = config?.importPreset
-        if (!importPreset.isNullOrEmpty()) {
-            return selectKeyboardConfig(importPreset)
-        }
-        return config
-    }
+    private fun selectKeyboardConfig(name: String): TextKeyboard? =
+        resolveKeyboardConfig(theme.presetKeyboards, name)
 
     private fun attachKeyboard(target: String) {
         currentKeyboardId = target
@@ -193,6 +194,9 @@ class KeyboardWindow(di: DI) :
             }
 
             currentKeyboard = it
+            // Keys draw their toggle state from a cache, so seed it once here
+            // instead of querying rime on every frame.
+            it.refreshToggleStates()
         }
 
         view.let {
@@ -379,6 +383,9 @@ class KeyboardWindow(di: DI) :
 
     override fun onRimeOptionUpdated(value: RimeMessage.OptionMessage.Data) {
         val option = value.option
+        // Keep the cached toggle state of the keys in sync for free -- the
+        // message already carries the new value.
+        activeKeyboard?.updateToggleState(option, value.value)
         when {
             option.startsWith("_keyboard_") -> {
                 val target = option.removePrefix("_keyboard_")

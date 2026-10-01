@@ -47,6 +47,16 @@ android {
         resValues = true
     }
 
+    // Reuse this checkout's debug key so updates keep the tablet's app data.
+    rootProject.file(".android-user-home/debug.keystore").takeIf { it.isFile }?.let { keystore ->
+        signingConfigs.getByName("debug").apply {
+            storeFile = keystore
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -69,6 +79,15 @@ android {
         }
         debug {
             applicationIdSuffix = ".debug"
+
+            // Keep the installable development build debuggable while compiling the
+            // CPU-heavy librime deployer with release optimizations. Without this,
+            // large schemas such as Wanxiang can take several minutes to deploy.
+            externalNativeBuild {
+                cmake {
+                    arguments("-DTRIME_OPTIMIZED_DEBUG=ON")
+                }
+            }
 
             resValue("string", "trime_app_name", "@string/app_name_debug")
         }
@@ -152,6 +171,7 @@ dependencies {
     implementation(libs.androidx.room.paging)
     implementation(libs.androidx.viewpager2)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.material)
     implementation(libs.flexbox)
     implementation(libs.bravh)
     implementation(libs.timber)

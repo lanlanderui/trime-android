@@ -9,7 +9,7 @@ import androidx.annotation.StringRes
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
-import androidx.preference.SwitchPreference
+import com.osfans.trime.ui.common.MaterialSwitchPreference
 import com.osfans.trime.ui.main.settings.DialogSeekBarPreference
 import com.osfans.trime.ui.main.settings.EditTextIntPreference
 
@@ -50,8 +50,8 @@ abstract class PreferenceDelegateUi<T : Preference>(
         @StringRes
         val summary: Int? = null,
         enableUiOn: (() -> Boolean)? = null,
-    ) : PreferenceDelegateUi<SwitchPreference>(key, enableUiOn) {
-        override fun createUi(context: Context) = SwitchPreference(context).apply {
+    ) : PreferenceDelegateUi<MaterialSwitchPreference>(key, enableUiOn) {
+        override fun createUi(context: Context) = MaterialSwitchPreference(context).apply {
             key = this@Switch.key
             isIconSpaceReserved = false
             isSingleLineTitle = false

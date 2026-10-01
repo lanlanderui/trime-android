@@ -11,9 +11,10 @@ import androidx.recyclerview.widget.RecyclerView
 
 fun RecyclerView.applyNavBarInsetsBottomPadding() {
     clipToPadding = false
+    val initialBottomPadding = paddingBottom
     ViewCompat.setOnApplyWindowInsetsListener(this) { _, windowInsets ->
         windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars()).also {
-            setPadding(paddingLeft, paddingTop, paddingRight, it.bottom)
+            setPadding(paddingLeft, paddingTop, paddingRight, initialBottomPadding + it.bottom)
         }
         windowInsets
     }

@@ -249,14 +249,29 @@ class Key(
 
     fun hasAction(behavior: KeyBehavior): Boolean = keyActions[behavior] != null
 
+    /**
+     * Re-reads the runtime options every behavior of this key toggles.
+     *
+     * Blocks until rime answers, so it must only be called when a keyboard is
+     * (re)built -- never from the draw path.
+     */
+    fun refreshToggleStates() = keyActions.values.forEach { it.refreshToggleState() }
+
+    /** Applies an option change reported by rime, without querying the native layer. */
+    fun updateToggleState(
+        option: String,
+        value: Boolean,
+    ) = keyActions.values.forEach { it.updateToggleState(option, value) }
+
     fun getAction(behavior: KeyBehavior): KeyAction? = keyActions[behavior]?.takeIf { behavior != KeyBehavior.CLICK } ?: checkKeyAction(sendBindings) ?: click
 
     private fun checkKeyAction(): KeyAction? {
-        val rime = rime
-        val asciiMode = rime.run { statusCached }.isAsciiMode
-        val paging = rime.run { paging }
-        val hasMenu = rime.run { hasMenu }
-        val composing = rime.run { statusCached }.isComposing
+        val session = rime
+        val status = session.status
+        val asciiMode = status.isAsciiMode
+        val paging = session.paging
+        val hasMenu = session.hasMenu
+        val composing = status.isComposing
         return keyActions[KeyBehavior.ASCII].takeIf { asciiMode }
             ?: keyActions[KeyBehavior.PAGING]?.takeIf { paging }
             ?: keyActions[KeyBehavior.HAS_MENU]?.takeIf { hasMenu }
@@ -274,7 +289,7 @@ class Key(
         label.isNotEmpty() &&
             keyAction == click &&
             !keyActions.containsKey(KeyBehavior.ASCII) &&
-            !rime.run { statusCached }.let { it.isAsciiMode || it.isAsciiPunct } -> label
+            !rime.status.let { it.isAsciiMode || it.isAsciiPunct } -> label
 
         else -> keyAction!!.getLabel(parent) // 中文狀態顯示標籤
     }

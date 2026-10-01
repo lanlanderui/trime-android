@@ -6,7 +6,6 @@
 package com.osfans.trime.ui.main.settings.schema
 
 import android.annotation.SuppressLint
-import android.app.AlertDialog
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
@@ -18,6 +17,7 @@ import androidx.core.view.doOnAttach
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import com.google.android.material.behavior.HideBottomViewOnScrollBehavior
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.BaseTransientBottomBar
 import com.google.android.material.snackbar.Snackbar
@@ -53,7 +53,7 @@ class SchemaListUi(
         view(::FloatingActionButton) {
             imageDrawable =
                 drawable(R.drawable.ic_baseline_add_24)!!.apply {
-                    setTint(styledColor(android.R.attr.colorForegroundInverse))
+                    setTint(styledColor(com.google.android.material.R.attr.colorOnPrimaryContainer))
                 }
         }
 
@@ -94,8 +94,7 @@ class SchemaListUi(
             fab.setOnClickListener {
                 val items = source.map { it.name }.toTypedArray()
                 val checked = BooleanArray(items.size) { false }
-                AlertDialog
-                    .Builder(ctx)
+                MaterialAlertDialogBuilder(ctx)
                     .setTitle(R.string.enable_schemata)
                     .setMultiChoiceItems(items, checked) { _, which, isChecked ->
                         checked[which] = isChecked
@@ -176,6 +175,7 @@ class SchemaListUi(
             layoutManager = verticalLayoutManager()
             adapter = this@SchemaListUi.adapter
             clipToPadding = false
+            setPadding(ctx.dp(8), ctx.dp(8), ctx.dp(8), 0)
         }
 
     private fun updateViewMargin(insets: WindowInsetsCompat? = null) {
@@ -189,7 +189,7 @@ class SchemaListUi(
 
     override val root =
         coordinatorLayout {
-            backgroundColor = styledColor(android.R.attr.colorBackground)
+            backgroundColor = styledColor(com.google.android.material.R.attr.colorSurface)
             add(
                 list,
                 defaultLParams {

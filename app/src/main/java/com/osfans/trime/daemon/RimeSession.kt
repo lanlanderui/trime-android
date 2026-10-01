@@ -4,13 +4,39 @@
 
 package com.osfans.trime.daemon
 
+import com.osfans.trime.core.CompositionProto
 import com.osfans.trime.core.RimeApi
+import com.osfans.trime.core.RimeSchema
+import com.osfans.trime.core.StatusProto
 import kotlinx.coroutines.CoroutineScope
 
 /**
  * A interface to run different operations on RimeApi
  */
 interface RimeSession {
+    /**
+     * Cached rime status.
+     *
+     * These cached accessors never block and never touch the native layer, so they
+     * are safe to call from the UI thread while drawing. Use them instead of
+     * [run] `{ statusCached }` in hot paths: [run] wraps the block in an event
+     * loop and, for anything that has to reach rime's thread, blocks the caller
+     * until it answers.
+     */
+    val status: StatusProto
+
+    /** Cached "the candidate list has a previous page" flag. Never blocks. */
+    val paging: Boolean
+
+    /** Cached "the candidate list is not empty" flag. Never blocks. */
+    val hasMenu: Boolean
+
+    /** Cached composition snapshot. Never blocks. */
+    val composition: CompositionProto
+
+    /** Cached schema of the current session. Never blocks. */
+    val schema: RimeSchema
+
     /**
      * Run an operation immediately
      * The suspended [block] will be executed in caller's thread.

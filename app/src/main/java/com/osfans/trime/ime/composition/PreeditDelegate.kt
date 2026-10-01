@@ -71,7 +71,31 @@ class PreeditDelegate(override val di: DI) :
         setupPreeditBackground(ui.preedit)
     }
 
+    /** Keeps the transparent touch receiver aligned while the floating keyboard moves. */
+    fun updateTouchReceiverPosition() {
+        if (ui.visible) {
+            touchEventReceiverWindow.show()
+        }
+    }
+
     private val touchEventReceiverWindow = TouchEventReceiverWindow(ui.root)
+
+    init {
+        // The touch receiver is a PopupWindow anchored to the preedit view, so it
+        // has to go away when that view leaves the window. Relying only on the
+        // composition emptying out is not enough: a theme switch, a floating
+        // keyboard toggle or a rotation rebuilds the input view mid-composition
+        // and would leave the popup anchored to a detached view.
+        ui.root.addOnAttachStateChangeListener(
+            object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) = Unit
+
+                override fun onViewDetachedFromWindow(v: View) {
+                    touchEventReceiverWindow.dismiss()
+                }
+            },
+        )
+    }
 
     override fun onCompositionUpdate(data: CompositionProto) {
         ui.update(data)

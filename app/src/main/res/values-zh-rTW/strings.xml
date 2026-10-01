@@ -43,7 +43,7 @@
     <string name="sync_user_data_immediately">立即同步使用者資料</string>
     <string name="reset_success">回廠成功</string>
     <string name="reset_failure">回廠失敗</string>
-    <string name="deploy_progress">正在部署…</string>
+    <string name="deploy_progress">正在部署…大型詞庫可能需要數分鐘。</string>
     <string name="other_ime">其他輸入法</string>
     <string name="ui_mode">使用者界面模式</string>
     <string name="advanced">高級</string>
@@ -152,6 +152,15 @@
     <string name="custom_sound_effect_enabled">使用自訂按鍵音</string>
     <string name="enable_landscape_mode">啟用橫屏模式</string>
     <string name="split_space_percent">自動分割鍵盤比例</string>
+    <string name="floating_keyboard">懸浮鍵盤</string>
+    <string name="floating_keyboard_summary">將鍵盤顯示為可移動卡片。可透過工具列按鈕切換模式，拖曳頂部橫條調整位置，雙擊橫條恢復預設位置。</string>
+    <string name="floating_keyboard_width">懸浮鍵盤寬度</string>
+    <string name="floating_keyboard_height">懸浮鍵盤高度</string>
+    <string name="floating_preedit_offset_x">懸浮編碼區水平偏移（向右為正）</string>
+    <string name="floating_preedit_offset_y">懸浮編碼區垂直偏移（向下為正）</string>
+    <string name="floating_keyboard_drag_handle">拖曳懸浮鍵盤，雙擊恢復預設位置</string>
+    <string name="enable_floating_keyboard">切換到懸浮鍵盤</string>
+    <string name="dock_keyboard">停靠鍵盤</string>
     <string name="setup__step_three">第 3 步</string>
     <string name="setup__select_data_path_hint">選擇<b>同文輸入法</b>如何儲存 Rime 資料</string>
     <string name="setup__select_data_path">選擇外部資料夾…</string>
@@ -256,4 +265,15 @@
     <string name="word_segment">分词</string>
     <string name="star_success">收藏成功</string>
     <string name="ignore_system_gesture_insets">忽略系統手勢插邊</string>
+    <string name="settings_group_data">語言與資料</string>
+    <string name="settings_group_experience">外觀與體驗</string>
+    <string name="settings_schemata_summary">選擇並管理目前啟用的輸入方案</string>
+    <string name="settings_user_dictionary_summary">查看並維護你的個人詞條</string>
+    <string name="settings_profile_summary">資料目錄、同步與維護</string>
+    <string name="settings_general_summary">調整輸入法的基礎行為</string>
+    <string name="settings_virtual_keyboard_summary">按鍵、手勢、聲音與觸覺回饋</string>
+    <string name="settings_candidates_window_summary">候選列顯示、分頁與版面配置</string>
+    <string name="settings_theme_summary">配色、版面配置與鍵盤外觀</string>
+    <string name="settings_clipboard_summary">剪貼簿歷史與保留規則</string>
+    <string name="settings_advanced_summary">顯示模式與進階選項</string>
 </resources>

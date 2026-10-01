@@ -119,6 +119,13 @@ class AppPrefs(
         shared: SharedPreferences,
     ) : PreferenceDelegateOwner(shared, R.string.virtual_keyboard) {
         companion object {
+            const val FLOATING_KEYBOARD = "floating_keyboard"
+            const val FLOATING_KEYBOARD_WIDTH = "floating_keyboard_width"
+            const val FLOATING_KEYBOARD_HEIGHT = "floating_keyboard_height"
+            const val FLOATING_KEYBOARD_OFFSET_X = "floating_keyboard_offset_x"
+            const val FLOATING_KEYBOARD_OFFSET_Y = "floating_keyboard_offset_y"
+            const val FLOATING_PREEDIT_OFFSET_X = "floating_preedit_offset_x"
+            const val FLOATING_PREEDIT_OFFSET_Y = "floating_preedit_offset_y"
             const val LANDSCAPE_MODE = "keyboard_landscape_mode"
             const val SPLIT_SPACE_PERCENT = "keyboard_split_space"
 
@@ -167,6 +174,51 @@ class AppPrefs(
             WIDE(R.string.wide_or_landscape),
             ALWAYS(R.string.always),
         }
+
+        val floatingKeyboard = switch(
+            R.string.floating_keyboard,
+            FLOATING_KEYBOARD,
+            false,
+            R.string.floating_keyboard_summary,
+        )
+        val floatingKeyboardWidth = int(
+            R.string.floating_keyboard_width,
+            FLOATING_KEYBOARD_WIDTH,
+            86,
+            60,
+            100,
+            "%",
+            2,
+        ) { floatingKeyboard.getValue() }
+        val floatingKeyboardHeight = int(
+            R.string.floating_keyboard_height,
+            FLOATING_KEYBOARD_HEIGHT,
+            100,
+            70,
+            130,
+            "%",
+            5,
+        ) { floatingKeyboard.getValue() }
+        val floatingPreeditOffsetX = int(
+            R.string.floating_preedit_offset_x,
+            FLOATING_PREEDIT_OFFSET_X,
+            0,
+            -120,
+            120,
+            "dp",
+            2,
+        ) { floatingKeyboard.getValue() }
+        val floatingPreeditOffsetY = int(
+            R.string.floating_preedit_offset_y,
+            FLOATING_PREEDIT_OFFSET_Y,
+            0,
+            -64,
+            64,
+            "dp",
+            2,
+        ) { floatingKeyboard.getValue() }
+        val floatingKeyboardOffsetX = int(FLOATING_KEYBOARD_OFFSET_X, 0)
+        val floatingKeyboardOffsetY = int(FLOATING_KEYBOARD_OFFSET_Y, 0)
 
         val landscapeMode = enum(R.string.enable_landscape_mode, LANDSCAPE_MODE, LandscapeMode.NEVER)
         val splitSpacePercent = int(

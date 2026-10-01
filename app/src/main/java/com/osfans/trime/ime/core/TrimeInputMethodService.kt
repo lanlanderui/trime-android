@@ -10,6 +10,7 @@ import android.app.Dialog
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.graphics.Rect
 import android.graphics.RectF
 import android.inputmethodservice.InputMethodService
 import android.os.Build
@@ -98,6 +99,11 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
     private var cursorUpdateIndex = 0
 
     private val recreateInputViewPrefs: Array<PreferenceDelegate<*>> = arrayOf(
+        prefs.keyboard.floatingKeyboard,
+        prefs.keyboard.floatingKeyboardWidth,
+        prefs.keyboard.floatingKeyboardHeight,
+        prefs.keyboard.floatingPreeditOffsetX,
+        prefs.keyboard.floatingPreeditOffsetY,
         prefs.keyboard.expandKeypressArea,
         prefs.keyboard.hideKeySymbol,
         prefs.keyboard.hideKeyHint,
@@ -199,6 +205,10 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         lifecycleScope.launch {
             rime.runOnReady {
                 ThemeManager.init(resources.configuration)
+                // The listeners live in static managers, and onDestroy has already
+                // removed this service's listeners by now -- registering after that
+                // would leak them for the rest of the process lifetime.
+                if (destroyed) return@runOnReady
                 ThemeManager.addOnChangedListener(onThemeChangeListener)
                 ColorManager.addOnChangedListener(onColorChangeListener)
             }
@@ -318,8 +328,16 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         inputView?.updateEnterKeyLabel(currentInputEditorInfo)
     }
 
+    /** Set once [onDestroy] has run; guards work that resumes after a suspension. */
+    private var destroyed = false
+
     override fun onDestroy() {
+        destroyed = true
         InputFeedbackManager.destroy()
+        // The dialog borrows this service's window token, so leaving it up while
+        // the service goes away leaks the window.
+        showingDialog?.dismiss()
+        showingDialog = null
         inputView = null
         recreateInputViewPrefs.forEach {
             it.unregisterOnChangeListener(recreateInputViewListener)
@@ -476,13 +494,34 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
 
     private val inputViewLocation = intArrayOf(0, 0)
 
+    fun requestInputInsetsUpdate() {
+        if (::decorView.isInitialized) {
+            decorView.requestLayout()
+        }
+    }
+
     override fun onComputeInsets(outInsets: Insets) {
         if (inputDeviceManager.useVirtualKeyboard) {
-            inputView?.keyboardView?.getLocationInWindow(inputViewLocation)
-            outInsets.apply {
-                contentTopInsets = inputViewLocation[1]
-                visibleTopInsets = inputViewLocation[1]
-                touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+            val currentInputView = inputView
+            val floatingBounds = Rect()
+            if (
+                currentInputView?.isFloatingKeyboardEnabled == true &&
+                currentInputView.getFloatingKeyboardBoundsInWindow(floatingBounds)
+            ) {
+                outInsets.apply {
+                    // A floating keyboard overlays the editor instead of resizing it.
+                    contentTopInsets = contentView.height
+                    visibleTopInsets = contentView.height
+                    touchableInsets = Insets.TOUCHABLE_INSETS_REGION
+                    touchableRegion.set(floatingBounds)
+                }
+            } else {
+                currentInputView?.keyboardView?.getLocationInWindow(inputViewLocation)
+                outInsets.apply {
+                    contentTopInsets = inputViewLocation[1]
+                    visibleTopInsets = inputViewLocation[1]
+                    touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+                }
             }
         } else {
             val n = decorView.findViewById<View>(android.R.id.navigationBarBackground)?.height ?: 0
@@ -992,11 +1031,18 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
     ): String? {
         val ic = currentInputConnection ?: return null
         var step = initialStep
-        while (true) {
+        var last: CharSequence? = null
+        // Cap the window growth. Without a bound, a very large document turns
+        // this into an unbounded main-thread IPC loop, and `step *= 2` would
+        // eventually overflow into a negative size.
+        val maxStep = 64 * 1024
+        while (step <= maxStep) {
             val text = (if (before) ic.getTextBeforeCursor(step, 0) else ic.getTextAfterCursor(step, 0)) ?: return ""
             if (text.length < step) return text.toString()
+            last = text
             step *= 2
         }
+        return last?.toString() ?: ""
     }
 
     override fun onEvaluateFullscreenMode(): Boolean = false

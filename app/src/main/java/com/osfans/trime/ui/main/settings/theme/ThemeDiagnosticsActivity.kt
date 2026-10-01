@@ -22,6 +22,7 @@ import com.osfans.trime.data.theme.ThemeDiagnostics
 import com.osfans.trime.data.theme.ThemeManager
 import com.osfans.trime.databinding.ActivityThemeDiagnosticsBinding
 import com.osfans.trime.util.DeviceInfo
+import com.osfans.trime.util.isNightMode
 import com.osfans.trime.util.toast
 import splitties.systemservices.clipboardManager
 import splitties.views.recyclerview.verticalLayoutManager
@@ -47,9 +48,11 @@ class ThemeDiagnosticsActivity : AppCompatActivity() {
             }
             windowInsets
         }
-        WindowCompat
-            .getInsetsController(window, window.decorView)
-            .isAppearanceLightStatusBars = false
+        val useDarkSystemBarIcons = !resources.configuration.isNightMode()
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = useDarkSystemBarIcons
+            isAppearanceLightNavigationBars = useDarkSystemBarIcons
+        }
 
         setContentView(binding.root)
         val theme = ThemeManager.activeTheme

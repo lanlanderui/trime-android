@@ -38,7 +38,9 @@ import com.osfans.trime.util.buildIntentFromArgument
 import com.osfans.trime.util.customFormatDateTime
 import com.osfans.trime.util.isAsciiPrintable
 import com.osfans.trime.util.toast
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.instance
@@ -193,6 +195,8 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                     "select_candidate" -> handleSelectCandidate(arg)
                     "switch_hide_key_symbol" -> switchHideKeySymbol()
                     "switch_hide_key_hint" -> switchHideKeyHint()
+                    "switch_floating_keyboard" -> switchFloatingKeyboard()
+                    "switch_hide_input_bar" -> switchHideInputBar()
                     else -> handleIntentAction(action.command, arg)
                 }
             }
@@ -236,10 +240,15 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                     service.lifecycleScope.launch { ThemeManager.selectTheme(themeId) }
                 } else {
                     // 通过主题名称查找对应的配置ID并切换主题
-                    ThemeManager.getAllThemes()
-                        .find { it.name.equals(arg, ignoreCase = true) }?.let { item ->
-                            service.lifecycleScope.launch { ThemeManager.selectTheme(item.configId) }
-                        }
+                    // Listing themes parses every theme file, so keep it off the
+                    // main thread instead of doing it during key dispatch.
+                    service.lifecycleScope.launch {
+                        val item = withContext(Dispatchers.IO) {
+                            ThemeManager.getAllThemes()
+                                .find { it.name.equals(arg, ignoreCase = true) }
+                        } ?: return@launch
+                        ThemeManager.selectTheme(item.configId)
+                    }
                 }
             }
 
@@ -306,6 +315,29 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
 
             private fun switchHideKeyHint() {
                 val preference = prefs.keyboard.hideKeyHint
+                preference.setValue(!preference.getValue())
+            }
+
+            /**
+             * 切換懸浮鍵盤。與輸入列上的懸浮鍵盤按鈕行為完全一致：修改偏好後，
+             * 由 [TrimeInputMethodService] 監聽到變更並重建輸入視圖。
+             *
+             * 可用於在隱藏工具欄（`hide_input_bar`）後仍能關閉懸浮鍵盤：
+             * ```yaml
+             * preset_keys:
+             *   ToggleFloatingKeyboard:
+             *     label: 懸浮
+             *     command: switch_floating_keyboard
+             * ```
+             */
+            private fun switchFloatingKeyboard() {
+                val preference = prefs.keyboard.floatingKeyboard
+                preference.setValue(!preference.getValue())
+            }
+
+            /** 切換工具欄（輸入列）的顯示與隱藏。 */
+            private fun switchHideInputBar() {
+                val preference = prefs.keyboard.hideInputBar
                 preference.setValue(!preference.getValue())
             }
 

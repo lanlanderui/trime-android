@@ -9,6 +9,8 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import java.io.File
+import java.io.FileNotFoundException
+import io.kotest.assertions.throwables.shouldThrow
 import kotlin.io.path.createTempDirectory
 
 class DocumentsBaseDirTest :
@@ -36,6 +38,22 @@ class DocumentsBaseDirTest :
             try {
                 val external = File(parent, "files").also { it.mkdirs() }
                 RimeDataProvider.resolveDocumentsRoot(external).shouldNotBeNull()
+            } finally {
+                parent.deleteRecursively()
+            }
+        }
+
+        "document IDs and child names cannot leave the published root" {
+            val parent = createTempDirectory().toFile()
+            try {
+                val root = File(parent, "files").also { it.mkdirs() }
+                RimeDataProvider.resolveDocument(root, "files") shouldBe root
+                RimeDataProvider.resolveDocument(root, "files/theme.yaml") shouldBe File(root, "theme.yaml")
+                shouldThrow<FileNotFoundException> { RimeDataProvider.resolveDocument(root, "files/../cache") }
+                shouldThrow<FileNotFoundException> { RimeDataProvider.resolveDocument(root, "files-other/theme.yaml") }
+                shouldThrow<FileNotFoundException> { RimeDataProvider.resolveDocument(root, "/files/theme.yaml") }
+                shouldThrow<FileNotFoundException> { RimeDataProvider.resolveChild(root, "../cache", root) }
+                shouldThrow<FileNotFoundException> { RimeDataProvider.resolveChild(root, "..", root) }
             } finally {
                 parent.deleteRecursively()
             }

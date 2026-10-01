@@ -5,6 +5,9 @@
 pluginManagement {
     includeBuild("build-logic")
     repositories {
+        maven("https://maven.aliyun.com/repository/gradle-plugin")
+        maven("https://maven.aliyun.com/repository/google")
+        maven("https://maven.aliyun.com/repository/central")
         gradlePluginPortal()
         google()
         mavenCentral()
@@ -14,6 +17,9 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        maven("https://maven.aliyun.com/repository/google")
+        maven("https://maven.aliyun.com/repository/central")
+        maven("https://maven.aliyun.com/repository/public")
         google()
         mavenCentral()
         maven("https://jitpack.io")

@@ -8,14 +8,12 @@ package com.osfans.trime.ui.main.settings.userdict
 import android.content.Context
 import android.content.res.ColorStateList
 import android.view.ViewGroup
+import androidx.core.widget.TextViewCompat
 import com.osfans.trime.R
 import splitties.dimensions.dp
 import splitties.resources.drawable
-import splitties.resources.resolveThemeAttribute
 import splitties.resources.styledColor
-import splitties.resources.styledDimenPxSize
 import splitties.resources.styledDrawable
-import splitties.views.backgroundColor
 import splitties.views.dsl.constraintlayout.before
 import splitties.views.dsl.constraintlayout.centerVertically
 import splitties.views.dsl.constraintlayout.constraintLayout
@@ -31,14 +29,14 @@ import splitties.views.dsl.core.textView
 import splitties.views.dsl.core.wrapContent
 import splitties.views.imageDrawable
 import splitties.views.setPaddingDp
-import splitties.views.textAppearance
 
 class UserDictListEntryUi(
     override val ctx: Context,
 ) : Ui {
     val nameText = textView {
         setPaddingDp(0, 16, 0, 16)
-        textAppearance = ctx.resolveThemeAttribute(android.R.attr.textAppearanceListItem)
+        TextViewCompat.setTextAppearance(this, com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
+        setTextColor(styledColor(com.google.android.material.R.attr.colorOnSurface))
     }
 
     val moreButton = imageButton {
@@ -48,11 +46,14 @@ class UserDictListEntryUi(
     }
 
     override val root = constraintLayout {
-        layoutParams = ViewGroup.LayoutParams(matchParent, wrapContent)
-        backgroundColor = styledColor(android.R.attr.colorBackground)
-        minHeight = styledDimenPxSize(android.R.attr.listPreferredItemHeightSmall)
+        layoutParams =
+            ViewGroup.MarginLayoutParams(matchParent, wrapContent).apply {
+                setMargins(0, dp(3), 0, dp(3))
+            }
+        background = drawable(R.drawable.bg_preference_item_material3)
+        minHeight = dp(72)
 
-        val paddingStart = styledDimenPxSize(android.R.attr.listPreferredItemPaddingStart)
+        val paddingStart = dp(16)
         add(
             nameText,
             lParams {

@@ -14,6 +14,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
+import com.google.android.material.color.DynamicColors
 import com.osfans.trime.data.db.ClipboardHelper
 import com.osfans.trime.data.db.CollectionHelper
 import com.osfans.trime.data.prefs.AppPrefs
@@ -58,6 +59,9 @@ class TrimeApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Let Android 12+ derive the settings palette from the user's wallpaper.
+        // Older Android versions keep using Trime's Material 3 fallback palette.
+        DynamicColors.applyToActivitiesIfAvailable(this)
         if (!BuildConfig.DEBUG) {
             Thread.setDefaultUncaughtExceptionHandler { _, e ->
                 val crashTime = System.currentTimeMillis()
@@ -141,7 +145,9 @@ class TrimeApplication : Application() {
             registerBroadcastReceiver()
             startWorkManager()
         } catch (e: Exception) {
-            e.fillInStackTrace()
+            // Swallowing this silently left the app running half-initialized,
+            // which later shows up as unrelated nulls and dead features.
+            Timber.e(e, "Application initialization failed")
             return
         }
     }

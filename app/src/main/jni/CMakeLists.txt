@@ -14,6 +14,13 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 # general options
 option(BUILD_SHARED_LIBS "" OFF)
 option(BUILD_TESTING "" OFF)
+option(TRIME_OPTIMIZED_DEBUG "Optimize native code in debuggable Android builds" OFF)
+
+if(TRIME_OPTIMIZED_DEBUG AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+  # Android's debug variant otherwise builds librime with -O0 and verbose DLOGs.
+  # Keep Java/Kotlin debuggability but make schema deployment match release builds.
+  add_compile_options(-O3 -DNDEBUG)
+endif()
 
 include(Boost)
 

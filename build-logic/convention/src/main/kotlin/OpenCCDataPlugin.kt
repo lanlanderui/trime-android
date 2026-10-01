@@ -7,7 +7,9 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Delete
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
@@ -39,6 +41,9 @@ class OpenCCDataPlugin : Plugin<Project> {
             project.tasks.register<InstallOpenCCDataTask>(INSTALL_TASK) {
                 inputDir.set(project.dataBaseDir)
                 outputDir.set(project.dataInstallDir)
+                pythonExecutable.set(
+                    project.providers.environmentVariable("PYTHON_EXECUTABLE").orElse("python3"),
+                )
             }
         // make sure OpenCC data have been installed before generating data checksums
         project.tasks.getByName(DataChecksumsPlugin.TASK).dependsOn(task)
@@ -63,6 +68,9 @@ class OpenCCDataPlugin : Plugin<Project> {
 
         @get:OutputDirectory
         abstract val outputDir: DirectoryProperty
+
+        @get:Input
+        abstract val pythonExecutable: Property<String>
 
         private val input by lazy { inputDir.get().asFile }
 
@@ -109,7 +117,7 @@ class OpenCCDataPlugin : Plugin<Project> {
                 ) {
                     execOperations.exec {
                         workingDir = output
-                        commandLine = listOf("python3", reverse, source, outputFilePath)
+                        commandLine = listOf(pythonExecutable.get(), reverse, source, outputFilePath)
                     }.assertNormalExitValue()
                 }
                 for (dict in DICTS_GENERATED) {

@@ -8,13 +8,13 @@ package com.osfans.trime.ui.main.settings
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.ListPreference
 import androidx.preference.Preference
-import androidx.preference.SwitchPreferenceCompat
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.osfans.trime.R
+import com.osfans.trime.daemon.RimeDaemon
 import com.osfans.trime.data.base.DataManager
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.prefs.PreferenceDelegate
@@ -22,6 +22,7 @@ import com.osfans.trime.data.sync.DataStorageMode
 import com.osfans.trime.data.sync.RimeDataSync
 import com.osfans.trime.data.sync.SafDisplayPath
 import com.osfans.trime.data.sync.UserDbMigration
+import com.osfans.trime.ui.common.MaterialSwitchPreference
 import com.osfans.trime.ui.common.PaddingPreferenceFragment
 import com.osfans.trime.ui.common.withLoadingDialog
 import com.osfans.trime.ui.main.MainViewModel
@@ -133,6 +134,7 @@ class ProfileSettingsFragment : PaddingPreferenceFragment() {
                     withContext(Dispatchers.IO) {
                         RimeDataSync.persistTreeUri(ctx, uri)
                         RimeDataSync.importToLocal(ctx).getOrThrow()
+                        RimeDaemon.retryStartup()
                         viewModel.rime.runOnReady { deploy(skipImport = true) }
                     }
                 }.onSuccess {
@@ -154,8 +156,7 @@ class ProfileSettingsFragment : PaddingPreferenceFragment() {
     }
 
     private fun promptSelectAnotherDirectory() {
-        AlertDialog
-            .Builder(requireContext())
+        MaterialAlertDialogBuilder(requireContext())
             .setMessage(R.string.select_another_directory_to_sync)
             .setPositiveButton(R.string.select_another_directory) { _, _ ->
                 RimeDataSync.clearExternalTree(requireContext())
@@ -166,8 +167,7 @@ class ProfileSettingsFragment : PaddingPreferenceFragment() {
     }
 
     private fun promptResetDataPathCancelled() {
-        AlertDialog
-            .Builder(requireContext())
+        MaterialAlertDialogBuilder(requireContext())
             .setMessage(R.string.reset_data_path_cancelled_message)
             .setPositiveButton(R.string.reset_data_path_pick_again) { _, _ ->
                 launchResetDataPathPicker()
@@ -180,8 +180,7 @@ class ProfileSettingsFragment : PaddingPreferenceFragment() {
 
     private fun promptExternalSyncFolderSelection() {
         val ctx = requireContext()
-        AlertDialog
-            .Builder(ctx)
+        MaterialAlertDialogBuilder(ctx)
             .setMessage(R.string.external_sync_select_folder_message)
             .setPositiveButton(R.string.setup__select_data_path) { _, _ ->
                 launchDataPathPicker(cancelToAppStorage = true)
@@ -199,10 +198,10 @@ class ProfileSettingsFragment : PaddingPreferenceFragment() {
             DataStorageMode.APP_STORAGE,
         )
         prefs.dataStorageMode.setValue(DataStorageMode.APP_STORAGE)
+        RimeDaemon.retryStartup()
         updateStorageModeUi()
         updateDataPathSummary()
-        AlertDialog
-            .Builder(requireContext())
+        MaterialAlertDialogBuilder(requireContext())
             .setMessage(R.string.external_sync_fallback_app_storage)
             .setPositiveButton(android.R.string.ok, null)
             .show()
@@ -243,6 +242,7 @@ class ProfileSettingsFragment : PaddingPreferenceFragment() {
                                 mode == DataStorageMode.APP_STORAGE
                             ) {
                                 RimeDataSync.clearExternalTree(ctx)
+                                RimeDaemon.retryStartup()
                                 updateDataPathSummary()
                             }
                             true
@@ -288,12 +288,12 @@ class ProfileSettingsFragment : PaddingPreferenceFragment() {
                     }
                 }
                 addPreference(
-                    SwitchPreferenceCompat(ctx).apply {
+                    MaterialSwitchPreference(ctx).apply {
                         key = AppPrefs.Profile.PERIODIC_BACKGROUND_SYNC
                         isIconSpaceReserved = false
                         setTitle(R.string.periodic_background_sync)
                         setDefaultValue(false)
-                        summaryProvider = Preference.SummaryProvider<SwitchPreferenceCompat> {
+                        summaryProvider = Preference.SummaryProvider<MaterialSwitchPreference> {
                             if (backgroundSyncEnable.getValue()) {
                                 val lastTime: String
                                 val lastStatus: String
@@ -343,8 +343,7 @@ class ProfileSettingsFragment : PaddingPreferenceFragment() {
                 addPreference(R.string.reset, R.string.reset_hint) {
                     val items = ctx.assets.list("shared") ?: return@addPreference
                     val checked = BooleanArray(items.size) { false }
-                    AlertDialog
-                        .Builder(ctx)
+                    MaterialAlertDialogBuilder(ctx)
                         .setTitle(R.string.reset)
                         .setMultiChoiceItems(items, checked) { _, id, isChecked ->
                             checked[id] = isChecked

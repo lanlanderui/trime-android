@@ -11,7 +11,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import androidx.coordinatorlayout.widget.CoordinatorLayout
-import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
@@ -49,7 +48,7 @@ class UserDictListUi(
         view(::FloatingActionButton) {
             imageDrawable =
                 drawable(R.drawable.ic_baseline_add_24)!!.apply {
-                    setTint(styledColor(android.R.attr.colorForegroundInverse))
+                    setTint(styledColor(com.google.android.material.R.attr.colorOnPrimaryContainer))
                 }
         }
 
@@ -75,6 +74,7 @@ class UserDictListUi(
         layoutManager = verticalLayoutManager()
         adapter = this@UserDictListUi.adapter
         clipToPadding = false
+        setPadding(ctx.dp(8), ctx.dp(8), ctx.dp(8), 0)
     }
 
     private fun updateViewMargin(insets: WindowInsetsCompat? = null) {
@@ -87,7 +87,7 @@ class UserDictListUi(
     }
 
     override val root = coordinatorLayout {
-        backgroundColor = styledColor(android.R.attr.colorBackground)
+        backgroundColor = styledColor(com.google.android.material.R.attr.colorSurface)
         add(
             list,
             defaultLParams {

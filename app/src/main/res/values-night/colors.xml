@@ -7,6 +7,22 @@ SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
 <resources>
-    <color name="colorAccent">#0A7CB2</color>
-    <color name="colorAccentDark">#28566d</color>
+    <color name="colorPrimary">#80D5D3</color>
+    <color name="colorOnPrimary">#003737</color>
+    <color name="colorPrimaryContainer">#004F50</color>
+    <color name="colorOnPrimaryContainer">#9CF1EF</color>
+    <color name="colorSecondary">#B0CCCA</color>
+    <color name="colorOnSecondary">#1B3534</color>
+    <color name="colorSecondaryContainer">#324B4A</color>
+    <color name="colorOnSecondaryContainer">#CCE8E6</color>
+    <color name="colorSurface">#0E1515</color>
+    <color name="colorOnSurface">#DEE4E3</color>
+    <color name="colorSurfaceVariant">#3F4948</color>
+    <color name="colorOnSurfaceVariant">#BEC9C8</color>
+    <color name="colorOutline">#899392</color>
+    <color name="colorOutlineVariant">#3F4948</color>
+    <color name="colorPrimaryDark">#80D5D3</color>
+    <color name="colorAccent">#80D5D3</color>
+    <color name="colorAccentDark">#4FCCC9</color>
+    <color name="toolbarForegroundColor">#DEE4E3</color>
 </resources>

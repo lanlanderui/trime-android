@@ -12,19 +12,20 @@ import android.view.ViewGroup
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.osfans.trime.R
 import com.osfans.trime.TrimeApplication
 import com.osfans.trime.databinding.ActivityLogBinding
 import com.osfans.trime.ui.main.log.LogView
 import com.osfans.trime.util.DeviceInfo
 import com.osfans.trime.util.Logcat
+import com.osfans.trime.util.isNightMode
 import com.osfans.trime.util.iso8601UTCDateTime
 import com.osfans.trime.util.toast
 import kotlinx.coroutines.Dispatchers
@@ -84,9 +85,11 @@ class LogActivity : AppCompatActivity() {
             }
             windowInsets
         }
-        WindowCompat
-            .getInsetsController(window, window.decorView)
-            .isAppearanceLightStatusBars = false
+        val useDarkSystemBarIcons = !resources.configuration.isNightMode()
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = useDarkSystemBarIcons
+            isAppearanceLightNavigationBars = useDarkSystemBarIcons
+        }
 
         setContentView(binding.root)
         with(binding) {
@@ -96,8 +99,7 @@ class LogActivity : AppCompatActivity() {
                 supportActionBar!!.setTitle(R.string.crash_logs)
                 clearButton.visibility = View.GONE
                 copyButton.visibility = View.GONE
-                AlertDialog
-                    .Builder(this@LogActivity)
+                MaterialAlertDialogBuilder(this@LogActivity)
                     .setTitle(R.string.app_crash)
                     .setMessage(R.string.app_crash_message)
                     .setPositiveButton(android.R.string.ok, null)

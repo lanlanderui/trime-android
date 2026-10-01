@@ -12,11 +12,9 @@ import android.view.ViewGroup
 import androidx.activity.addCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.graphics.drawable.DrawerArrowDrawable
-import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsAnimationCompat
@@ -27,6 +25,8 @@ import androidx.core.view.updateLayoutParams
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.fragment.NavHostFragment
+import com.google.android.material.color.MaterialColors
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.hjq.permissions.Permission
 import com.hjq.permissions.XXPermissions
 import com.osfans.trime.BuildConfig
@@ -36,6 +36,7 @@ import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.soundeffect.SoundEffectManager
 import com.osfans.trime.databinding.ActivityMainBinding
 import com.osfans.trime.ui.setup.SetupActivity
+import com.osfans.trime.util.isNightMode
 import com.osfans.trime.util.isStorageAvailable
 import com.osfans.trime.util.item
 import com.osfans.trime.util.parcelable
@@ -94,21 +95,32 @@ class MainActivity : AppCompatActivity() {
                 }
             },
         )
-        WindowCompat
-            .getInsetsController(window, window.decorView)
-            .isAppearanceLightStatusBars = false
+        val useDarkSystemBarIcons = !resources.configuration.isNightMode()
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = useDarkSystemBarIcons
+            isAppearanceLightNavigationBars = useDarkSystemBarIcons
+        }
 
         setContentView(binding.root)
         // always show toolbar back arrow icon
         binding.mainToolbar.toolbar.navigationIcon =
             DrawerArrowDrawable(this).apply {
                 progress = 1f
-                color = ContextCompat.getColor(this@MainActivity, R.color.toolbarForegroundColor)
+                color =
+                    MaterialColors.getColor(
+                        binding.mainToolbar.toolbar,
+                        com.google.android.material.R.attr.colorOnSurface,
+                    )
             }
         // show menu icon and other action icons on toolbar
         // don't use `setSupportActionBar(binding.toolbar)` here,
         // because navController would change toolbar title, we need to control it by ourselves
-        setupToolbarMenu(binding.mainToolbar.toolbar.menu)
+        val toolbarIconColor =
+            MaterialColors.getColor(
+                binding.mainToolbar.toolbar,
+                com.google.android.material.R.attr.colorOnSurface,
+            )
+        setupToolbarMenu(binding.mainToolbar.toolbar.menu, toolbarIconColor)
         navController = binding.navHostFragment.getFragment<NavHostFragment>().navController
         navController.graph = NavigationRoute.createGraph(navController)
         binding.mainToolbar.toolbar.setNavigationOnClickListener {
@@ -167,7 +179,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupToolbarMenu(menu: Menu) {
+    private fun setupToolbarMenu(
+        menu: Menu,
+        iconColor: Int,
+    ) {
         val optionMenuItems = listOf(
             menu.item(R.string.deploy, R.drawable.ic_baseline_refresh_reversed_24, showAsAction = true) {
                 viewModel.rime.launchOnReady { it.deploy() }
@@ -204,6 +219,7 @@ class MainActivity : AppCompatActivity() {
         menu.forEach { item ->
             // show menu item on demand
             item.isVisible = false
+            item.icon?.mutate()?.setTint(iconColor)
         }
     }
 
@@ -236,8 +252,7 @@ class MainActivity : AppCompatActivity() {
         if (XXPermissions.isGranted(this, Permission.POST_NOTIFICATIONS)) {
             return
         } else {
-            AlertDialog
-                .Builder(this)
+            MaterialAlertDialogBuilder(this)
                 .setIconAttribute(android.R.attr.alertDialogIcon)
                 .setTitle(R.string.notification_permission_title)
                 .setMessage(R.string.notification_permission_message)

@@ -72,6 +72,35 @@ class RimeDataProvider : DocumentsProvider() {
             val parentPath = base.parent ?: return null
             return base to "$parentPath${File.separator}"
         }
+
+        private fun isWithin(parent: File, child: File): Boolean {
+            val parentPath = parent.canonicalPath
+            val childPath = child.canonicalPath
+            return childPath == parentPath || childPath.startsWith("$parentPath${File.separator}")
+        }
+
+        /** Document IDs start with the published root name and never escape it. */
+        internal fun resolveDocument(root: File, documentId: String): File {
+            val rootName = root.name
+            if (documentId != rootName && !documentId.startsWith("$rootName/")) {
+                throw FileNotFoundException("Invalid document ID")
+            }
+            val relative = documentId.removePrefix(rootName).removePrefix("/")
+            val file = if (relative.isEmpty()) root else File(root, relative)
+            if (!isWithin(root, file)) throw FileNotFoundException("Document is outside the shared root")
+            return file
+        }
+
+        internal fun resolveChild(parent: File, name: String, root: File): File {
+            if (name.isBlank() || name == "." || name == ".." || '/' in name || '\\' in name) {
+                throw FileNotFoundException("Invalid document name")
+            }
+            val child = File(parent, name)
+            if (!isWithin(root, child) || !isWithin(parent, child)) {
+                throw FileNotFoundException("Document is outside the shared root")
+            }
+            return child
+        }
     }
 
     private var baseDir: File? = null
@@ -79,7 +108,11 @@ class RimeDataProvider : DocumentsProvider() {
     private var textFilePaths: Array<String> = emptyArray()
 
     private val File.docId
-        get() = absolutePath.removePrefix(docIdPrefix())
+        get(): String {
+            val root = baseDir ?: throw FileNotFoundException("App files dir is not available")
+            if (!isWithin(root, this)) throw FileNotFoundException("Document is outside the shared root")
+            return absolutePath.removePrefix(docIdPrefix())
+        }
 
     private fun docIdPrefix(): String {
         if (!ensureBaseDir()) {
@@ -88,7 +121,10 @@ class RimeDataProvider : DocumentsProvider() {
         return docIdPrefix!!
     }
 
-    private fun fileFromDocId(docId: String) = File(docIdPrefix(), docId)
+    private fun fileFromDocId(docId: String): File {
+        docIdPrefix()
+        return resolveDocument(baseDir!!, docId)
+    }
 
     private fun ensureBaseDir(): Boolean {
         if (baseDir != null && docIdPrefix != null) return true
@@ -133,7 +169,7 @@ class RimeDataProvider : DocumentsProvider() {
         sortOrder: String?,
     ) = MatrixCursor(projection ?: DEFAULT_DOCUMENT_PROJECTION).apply {
         fileFromDocId(parentDocumentId).listFiles()?.forEach {
-            newRowFromFile(it)
+            if (runCatching { isWithin(baseDir!!, it) }.getOrDefault(false)) newRowFromFile(it)
         }
     }
 
@@ -182,7 +218,7 @@ class RimeDataProvider : DocumentsProvider() {
 
     @Throws(FileNotFoundException::class)
     override fun deleteDocument(documentId: String) {
-        fileFromDocId(documentId).apply {
+        mutableDocument(documentId).apply {
             val ok =
                 if (isDirectory) {
                     deleteRecursively()
@@ -200,14 +236,18 @@ class RimeDataProvider : DocumentsProvider() {
     override fun isChildDocument(
         parentDocumentId: String,
         documentId: String,
-    ): Boolean = documentId.startsWith(parentDocumentId)
+    ): Boolean = runCatching {
+        val parent = fileFromDocId(parentDocumentId)
+        val child = fileFromDocId(documentId)
+        child.canonicalPath != parent.canonicalPath && isWithin(parent, child)
+    }.getOrDefault(false)
 
     @Throws(FileNotFoundException::class)
     override fun copyDocument(
         sourceDocumentId: String,
         targetParentDocumentId: String,
     ): String {
-        val oldFile = fileFromDocId(sourceDocumentId)
+        val oldFile = mutableDocument(sourceDocumentId)
         val newFile = createAbstractFile(targetParentDocumentId, oldFile.name)
         oldFile.apply {
             try {
@@ -232,12 +272,12 @@ class RimeDataProvider : DocumentsProvider() {
         documentId: String,
         displayName: String,
     ): String {
-        val oldFile = fileFromDocId(documentId)
-        val newFile = oldFile.resolveSibling(displayName)
+        val oldFile = mutableDocument(documentId)
+        val newFile = resolveChild(oldFile.parentFile ?: throw FileNotFoundException("No parent"), displayName, baseDir!!)
         if (newFile.exists()) {
             throw FileNotFoundException("renameDocument id=$documentId to $displayName failed: target exists")
         }
-        oldFile.renameTo(newFile)
+        if (!oldFile.renameTo(newFile)) throw FileNotFoundException("renameDocument id=$documentId failed")
         return newFile.docId
     }
 
@@ -247,9 +287,9 @@ class RimeDataProvider : DocumentsProvider() {
         sourceParentDocumentId: String,
         targetParentDocumentId: String,
     ): String {
-        val oldFile = fileFromDocId(sourceDocumentId)
+        val oldFile = mutableDocument(sourceDocumentId)
         val newFile = createAbstractFile(targetParentDocumentId, oldFile.name)
-        oldFile.renameTo(newFile)
+        if (!oldFile.renameTo(newFile)) throw FileNotFoundException("moveDocument id=$sourceDocumentId failed")
         return newFile.docId
     }
 
@@ -262,6 +302,7 @@ class RimeDataProvider : DocumentsProvider() {
         val q = query.lowercase()
         fileFromDocId(rootId)
             .walk()
+            .filter { runCatching { isWithin(baseDir!!, it) }.getOrDefault(false) }
             .filter { it.name.lowercase().contains(q) }
             .take(SEARCH_RESULTS_LIMIT)
             .forEach { newRowFromFile(it) }
@@ -281,13 +322,19 @@ class RimeDataProvider : DocumentsProvider() {
         displayName: String,
     ): File {
         val parent = fileFromDocId(parentDocumentId)
-        var newFile = parent.resolve(displayName)
+        var newFile = resolveChild(parent, displayName, baseDir!!)
         var noConflictId = 2
         while (newFile.exists()) {
-            newFile = parent.resolve("$displayName ($noConflictId)")
+            newFile = resolveChild(parent, "$displayName ($noConflictId)", baseDir!!)
             noConflictId += 1
         }
         return newFile
+    }
+
+    private fun mutableDocument(documentId: String): File = fileFromDocId(documentId).also {
+        if (it.canonicalPath == baseDir!!.canonicalPath) {
+            throw FileNotFoundException("The shared root cannot be modified")
+        }
     }
 
     @Throws(FileNotFoundException::class)
@@ -307,7 +354,7 @@ class RimeDataProvider : DocumentsProvider() {
                     Document.FLAG_SUPPORTS_WRITE
                 }
         }
-        if (file.parentFile?.canWrite() == true) {
+        if (file.parentFile?.canWrite() == true && file.canonicalPath != baseDir!!.canonicalPath) {
             flags = flags or
                 Document.FLAG_SUPPORTS_DELETE or
                 Document.FLAG_SUPPORTS_RENAME

@@ -7,12 +7,35 @@ SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
 <resources>
-    <style name="Theme.TrimeAppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style name="Theme.TrimeAppTheme" parent="Theme.TrimeAppTheme.Api">
         <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
-        <item name="android:colorAccent" >@color/colorAccent</item>
+        <item name="colorOnPrimary">@color/colorOnPrimary</item>
+        <item name="colorPrimaryContainer">@color/colorPrimaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/colorOnPrimaryContainer</item>
+        <item name="colorSecondary">@color/colorSecondary</item>
+        <item name="colorOnSecondary">@color/colorOnSecondary</item>
+        <item name="colorSecondaryContainer">@color/colorSecondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/colorOnSecondaryContainer</item>
+        <item name="colorSurface">@color/colorSurface</item>
+        <item name="colorOnSurface">@color/colorOnSurface</item>
+        <item name="colorSurfaceVariant">@color/colorSurfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/colorOnSurfaceVariant</item>
+        <item name="colorOutline">@color/colorOutline</item>
+        <item name="colorOutlineVariant">@color/colorOutlineVariant</item>
+        <item name="colorControlNormal">@color/colorOnSurfaceVariant</item>
+        <item name="colorControlActivated">@color/colorPrimary</item>
+        <item name="android:colorAccent">@color/colorPrimary</item>
+        <item name="android:windowBackground">@color/colorSurface</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/colorSurface</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Material3.MaterialAlertDialog</item>
     </style>
 
-    <style name="Theme.DialogTheme" parent="@android:style/Theme.DeviceDefault.Dialog" />
+    <style name="Theme.DialogTheme" parent="Theme.Material3.DayNight.Dialog.Alert" />
+
+    <style name="ShapeAppearanceOverlay.Trime.SettingsCard" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">24dp</item>
+    </style>
 </resources>
