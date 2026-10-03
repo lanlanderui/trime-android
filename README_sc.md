@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: 2015 - 2024 Rime community
 SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
-# 同文 Android 输入法平台
+# 同文 Android 输入法平台（个人修改版）
 
 ![build](https://github.com/osfans/trime/actions/workflows/commit-ci.yml/badge.svg?branch=develop)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -23,6 +23,12 @@ SPDX-License-Identifier: GPL-3.0-or-later
 > 本仓库与原项目**无隶属关系，也不是官方发布版**，只是作者个人构建的个人版本；
 > 原代码、文档与素材的著作权均归 Rime community 所有，许可证为 GPL-3.0-or-later。
 > 遇到问题请在本仓库反馈，**不要**提到原项目去。
+> 上方徽章与下方下载链接均指向**原项目**，都与本仓库的个人构建无关。
+
+> [!NOTE]
+> **本仓库相对原版的改动，是在 AI 助手辅助下以「vibe coding」方式完成的：**
+> 作者用自然语言描述需求，由 AI 编写与修改代码，随后每一项改动都在真机上验证过。
+> 它能满足作者本人的日常使用，但**没有经过原项目维护者评审**，请当作未评审的个人构建来看待。
 
 ## 关于
 
@@ -31,6 +37,10 @@ SPDX-License-Identifier: GPL-3.0-or-later
 [查看文档](https://github.com/osfans/trime/wiki)
 
 ## 下载
+
+> [!WARNING]
+> 以下链接均为**原项目**的官方渠道（F-Droid / Google Play / 原项目 Release），
+> 下载安装的是官方版 Trime，与本仓库的个人构建无关。
 
 - 稳定版 <br>
   [<img alt='Get it on F-Droid' src='https://fdroid.gitlab.io/artwork/badge/get-it-on.png' height='80px'/>](https://f-droid.org/packages/com.osfans.trime)
