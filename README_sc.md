@@ -14,6 +14,16 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 [English](README.md) | 简体中文 | [繁體中文](README_tc.md)
 
+> [!IMPORTANT]
+> **本仓库是作者个人修改的版本，并非新项目。**
+>
+> 全部内容基于原项目 [**同文输入法 Trime**](https://github.com/osfans/trime)
+> （上游仓库 [`osfans/trime`](https://github.com/osfans/trime)，由
+> [Rime community](https://github.com/osfans) 维护）修改而来。
+> 本仓库与原项目**无隶属关系，也不是官方发布版**，只是作者个人构建的个人版本；
+> 原代码、文档与素材的著作权均归 Rime community 所有，许可证为 GPL-3.0-or-later。
+> 遇到问题请在本仓库反馈，**不要**提到原项目去。
+
 ## 关于
 
 源于开源的[注音仓颉输入法]前端，基于著名的 [RIME] 输入法框架，使用 JNI 的 C 语言和 Android 的 Java/Kotlin 语言书写，旨在保护汉语各地方言母语，音码、形码通用的输入法平台。

@@ -14,6 +14,16 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 [English](README.md) | [简体中文](README_sc.md) | 繁體中文
 
+> [!IMPORTANT]
+> **本倉庫是作者個人修改的版本，並非新專案。**
+>
+> 全部內容基於原專案 [**同文輸入法 Trime**](https://github.com/osfans/trime)
+> （上游倉庫 [`osfans/trime`](https://github.com/osfans/trime)，由
+> [Rime community](https://github.com/osfans) 維護）修改而來。
+> 本倉庫與原專案**無隸屬關係，也不是官方發行版**，只是作者個人建構的個人版本；
+> 原程式碼、文件與素材的著作權均歸 Rime community 所有，許可證為 GPL-3.0-or-later。
+> 遇到問題請在本倉庫回饋，**不要**提到原專案去。
+
 ## 關於
 
 源於開源的[注音倉頡輸入法]前端，基於著名的 [RIME] 輸入法框架，使用 JNI 的 C 語言和 Android 的 Java/Kotlin 語言書寫，旨在保護漢語各地方言母語，音碼、形碼通用的輸入法平臺。

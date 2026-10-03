@@ -16,6 +16,21 @@ Rime IME for Android
 
 English | [简体中文](README_sc.md) | [繁體中文](README_tc.md)
 
+> [!IMPORTANT]
+> **This is a personal, modified build of Trime — not a new or separate project.**
+>
+> Everything here starts from [**Trime (同文输入法)**](https://github.com/osfans/trime) and its
+> upstream repository [`osfans/trime`](https://github.com/osfans/trime), maintained by the
+> [Rime community](https://github.com/osfans). This repository is **not affiliated with, endorsed
+> by, or released by** that project — it is one person's own build of it. All original code,
+> documentation and artwork remain the work and copyright of the Rime community, licensed under
+> GPL-3.0-or-later. If you run into a problem, please report it **here**, not upstream.
+>
+> 本仓库是作者**个人修改的 Trime 版本**，并非新项目：全部内容基于原项目
+> [同文输入法 Trime](https://github.com/osfans/trime) 修改而来，与原项目**无隶属关系，也不是官方发布版**。
+> 原代码、文档与素材的著作权归 Rime community 所有，许可证为 GPL-3.0-or-later。
+> 遇到问题请在本仓库反馈，**不要**提到原项目去。
+
 ## About
 
 Trime is originally a frontend of open-source [Android Traditional Chinese IME], based on [RIME] input method framework and written in Java/Kotlin with JNI. It is designed to protect the native language of various local dialects of Chinese and is a universal shape-based and phonetic-based input method platform.
