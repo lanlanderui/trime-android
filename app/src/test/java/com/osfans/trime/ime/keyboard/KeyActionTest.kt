@@ -167,6 +167,7 @@ class KeyActionTest :
                     listOf(
                         "switch_floating_keyboard",
                         "switch_hide_input_bar",
+                        "switch_candidates_window",
                         "switch_hide_key_symbol",
                         "switch_hide_key_hint",
                     ).forEach { command ->

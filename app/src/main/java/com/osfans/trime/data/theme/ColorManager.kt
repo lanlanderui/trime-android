@@ -45,6 +45,16 @@ object ColorManager {
         get() = requireNotNull(requireScope().activeColorScheme) { "ColorManager is not initialized" }
 
     /**
+     * Whether the built-in dynamic scheme is the active one.
+     *
+     * The one scheme that is not the theme's: it paints keys from its own palette by key *kind*
+     * (see `KeyPalette`), so a key asks this to know that the colour keys the theme bound to it
+     * no longer apply.
+     */
+    val isDynamicSchemeActive: Boolean
+        get() = scope?.activeColorScheme?.id == DynamicColorScheme.ID
+
+    /**
      * Everything the user can pick between: the theme's presets plus the built-in system dynamic
      * scheme.
      *
@@ -131,11 +141,25 @@ object ColorManager {
      * against the schemes handed to [ColorSchemeResolver], so leaving it out would silently
      * resolve a persisted [DynamicColorScheme.ID] back to the theme default.
      */
-    private fun selectableSchemes(theme: Theme): List<ColorScheme> =
-        ColorSchemeResolver.selectable(
-            presets = theme.colorSchemes,
-            dynamic = if (DynamicColorScheme.isSupported) DynamicColorScheme.create(isNightMode) else null,
+    private fun selectableSchemes(theme: Theme): List<ColorScheme> {
+        val presets = theme.colorSchemes
+        return ColorSchemeResolver.selectable(
+            presets = presets,
+            dynamic =
+                if (DynamicColorScheme.isSupported) {
+                    DynamicColorScheme.create(
+                        isNight = isNightMode,
+                        // Layered on whatever the theme itself would show for this day/night state,
+                        // so colour keys only the theme defines keep a value. A theme declaring no
+                        // preset is refused by ThemeLoader, but the picker still asks before one is
+                        // attached, and `themeBaseline` insists on a non-empty list.
+                        base = presets.takeIf { it.isNotEmpty() }?.let { ColorSchemeResolver.themeBaseline(it, isNightMode) },
+                    )
+                } else {
+                    null
+                },
         )
+    }
 
     private fun resolveActiveScheme(theme: Theme): ColorScheme = ColorSchemeResolver.resolve(
         schemes = selectableSchemes(theme),
@@ -195,7 +219,11 @@ object ColorManager {
             return when (tableEntry) {
                 is ColorTable.Value.Color -> GradientDrawable().apply { setColor(tableEntry.argb) }
                 is ColorTable.Value.Image -> imageDrawable(scope, tableEntry.path)
-                ColorTable.Value.None -> parseDrawable(scope, key)
+                // The chain found nothing usable for a built-in key, so report "no drawable" and let
+                // the caller fall back to a key of its own. Parsing the key *name* as a colour, as
+                // this used to, can only fail — it painted a transparent drawable, which is how a key
+                // ends up silently invisible instead of picking up a default.
+                ColorTable.Value.None -> null
             }
         }
         // Keys defined only by a theme resolve through the same chain rules.

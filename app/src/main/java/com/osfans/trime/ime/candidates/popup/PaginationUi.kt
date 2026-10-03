@@ -44,7 +44,7 @@ class PaginationUi(
 
     override val root =
         constraintLayout {
-            val w = dp(10)
+            val w = dp(ICON_WIDTH_DP)
             val h = dp(20)
             add(
                 nextIcon,
@@ -70,5 +70,19 @@ class PaginationUi(
         nextIcon.imageTintList = tint
         prevIcon.alpha = if (paged.hasPrevPage) 1f else disabledAlpha
         nextIcon.alpha = if (paged.hasNextPage) 1f else disabledAlpha
+    }
+
+    companion object {
+        /** Width of one arrow icon, in dp. */
+        const val ICON_WIDTH_DP = 10
+
+        /**
+         * Width of the whole pagination item, in dp.
+         *
+         * The candidate row has a fixed width per candidate (see [PagedCandidatesUi]), so it has
+         * to reserve this much for the arrows -- otherwise the last candidate would push them
+         * over the window's limit and force a second line.
+         */
+        const val WIDTH_DP = 2 * ICON_WIDTH_DP
     }
 }

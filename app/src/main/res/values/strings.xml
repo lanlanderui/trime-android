@@ -215,9 +215,16 @@
     <string name="top_left">Top left</string>
     <string name="top_right">Top right</string>
     <string name="candidates_window_position">Candidates window position</string>
+    <string name="candidates_window_background_alpha">Candidates window background opacity</string>
+    <string name="candidates_item_background">Candidate item background</string>
+    <string name="candidates_item_background_summary">Also fill the candidates other than the highlighted one, in the separator colour</string>
+    <string name="candidates_item_spacing">Candidate item spacing</string>
+    <string name="candidates_item_background_alpha">Candidate item background opacity</string>
     <string name="deploy_failure">Deploy failure</string>
     <string name="view_deploy_failure_log">Deploy failure. Click here to view error log.</string>
+    <string name="hide_candidates_window">Hide candidates window</string>
     <string name="hide_input_bar">Hide input bar</string>
+    <string name="bottom_toggle_margin">Bottom toggle margin</string>
     <string name="hide_key_symbol">Hide key symbol</string>
     <string name="hide_key_hint">Hide key hint</string>
     <string name="navbar_bkg_none">No background</string>

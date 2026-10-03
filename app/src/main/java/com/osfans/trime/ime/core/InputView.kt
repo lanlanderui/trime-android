@@ -98,6 +98,170 @@ internal const val POPUP_LAYER_ELEVATION_DP = 24f
 internal fun resizedPercent(startPercent: Int, startPixels: Int, deltaPixels: Float, min: Int, max: Int): Int =
     (startPercent * (startPixels + deltaPixels) / startPixels).roundToInt().coerceIn(min, max)
 
+/**
+ * Narrowest the floating keyboard is allowed to get, in dp.
+ *
+ * The width preference is a share, and the share is taken against a reference that survives a
+ * rotation (see [widthPercentForLayout]). On a device whose window is 1200px wide in portrait and
+ * 2670px in landscape, a share of the *window* would make the same setting mean 1116px one way and
+ * 2483px the other -- "too big in landscape, tiny in portrait". Pinning the floor to an absolute
+ * size as well keeps the keyboard usable no matter how wide the window gets.
+ */
+internal const val FLOATING_KEYBOARD_MIN_WIDTH_DP = 160
+
+/**
+ * Lower bound of the width setting, mirroring `AppPrefs.Keyboard.floatingKeyboardWidth`'s slider.
+ *
+ * The absolute dp minimum above usually lands above this on a phone, so this only matters on very
+ * narrow screens -- but it must never allow a width the settings slider cannot represent.
+ */
+internal const val MIN_FLOATING_KEYBOARD_WIDTH_PERCENT = 40
+
+/**
+ * Turns a width *share of [referenceWidthPx]* into the share of [windowWidthPx] the layout needs.
+ *
+ * This is what makes a chosen width survive a rotation: the reference is the screen's short side,
+ * which is the same in both orientations, so the same setting produces the same physical width
+ * instead of following the window around. Returns 100 when the geometry is not known yet (before
+ * the first layout), which leaves the keyboard full width rather than guessing.
+ */
+internal fun widthPercentForLayout(
+    widthPercent: Int,
+    referenceWidthPx: Int,
+    windowWidthPx: Int,
+): Int {
+    if (referenceWidthPx <= 0 || windowWidthPx <= 0) return 100
+    val share = (widthPercent.toLong() * referenceWidthPx / windowWidthPx).toInt()
+    return share.coerceIn(1, 100)
+}
+
+/**
+ * Smallest share of [referenceWidthPx] that still leaves [minWidthDp] pixels of keyboard.
+ *
+ * Only bites on very wide windows (landscape, tablets); on a narrow one the ordinary lower bound
+ * of the setting is already the larger of the two.
+ */
+internal fun minWidthPercentFor(
+    minWidthDp: Int,
+    referenceWidthPx: Int,
+    density: Float,
+): Int {
+    if (referenceWidthPx <= 0 || density <= 0f) return 1
+    val minPx = minWidthDp * density
+    return (minPx * 100f / referenceWidthPx).roundToInt().coerceAtLeast(1)
+}
+
+/**
+ * Horizontal scale that makes the composed width equal [widthPercent] percent of the width floor.
+ */
+internal fun floatingScaleX(widthPercent: Int, baseWidthPercent: Int): Float {
+    if (baseWidthPercent <= 0) return 1f
+    return widthPercent.toFloat() / baseWidthPercent
+}
+
+/**
+ * Vertical scale for the floating keyboard.
+ *
+ * The toolbar keeps its themed height while the key area absorbs the whole delta. The delta is
+ * expressed over [referenceHeight] (the IME window height, i.e. the space the keyboard can grow
+ * into) and mapped onto [containerHeight] (the keyboard's own measured height), which is the
+ * geometry the drag has always used.
+ */
+internal fun floatingScaleY(
+    heightPercent: Int,
+    baseHeightPercent: Int,
+    containerHeight: Int,
+    referenceHeight: Int,
+): Float {
+    if (baseHeightPercent <= 0 || containerHeight <= 0) return 1f
+    return 1f +
+        referenceHeight.toFloat() / containerHeight *
+        (heightPercent - baseHeightPercent) / baseHeightPercent.toFloat()
+}
+
+/**
+ * Horizontal anchor of an IME-level bottom toggle. They all pin themselves to the bottom
+ * edge of the keyboard surface as well.
+ */
+internal enum class ActionHandleAnchor {
+    /** Bottom-left corner of the surface. */
+    SURFACE_START,
+
+    /** Bottom-right corner of the surface. */
+    SURFACE_END,
+
+    /** Right after the drag grip, which forms a left-side cluster with the toggles. */
+    AFTER_DRAG_GRIP,
+
+    /** Right after the candidate window toggle. */
+    AFTER_CANDIDATES_WINDOW_TOGGLE,
+
+    /** Right after the floating keyboard toggle. */
+    AFTER_FLOATING_KEYBOARD_TOGGLE,
+
+    /** Right after the toolbar toggle, keeping the two toggles side by side. */
+    AFTER_TOOLBAR_TOGGLE,
+}
+
+/** The IME-level toggles that share the bottom edge of the keyboard surface. */
+internal enum class BottomToggle {
+    /** Shows or hides the floating candidate window that replaces the keyboard. */
+    CANDIDATES_WINDOW,
+
+    /** Docks the keyboard or sets it floating. */
+    FLOATING_KEYBOARD,
+
+    /** Shows or hides the input bar. */
+    TOOLBAR,
+}
+
+/**
+ * Anchors of the bottom toggles, in layout order.
+ *
+ * A floating keyboard keeps every toggle after the drag grip, because the resize grip owns
+ * the bottom-right corner. Docked mode hides both grips and frees the corners, so the row
+ * starts in the bottom-left one and the toolbar toggle moves to the bottom-right one.
+ */
+internal fun actionHandleAnchors(floating: Boolean): List<Pair<BottomToggle, ActionHandleAnchor>> =
+    if (floating) {
+        listOf(
+            BottomToggle.TOOLBAR to ActionHandleAnchor.AFTER_DRAG_GRIP,
+            BottomToggle.FLOATING_KEYBOARD to ActionHandleAnchor.AFTER_TOOLBAR_TOGGLE,
+            BottomToggle.CANDIDATES_WINDOW to ActionHandleAnchor.AFTER_FLOATING_KEYBOARD_TOGGLE,
+        )
+    } else {
+        listOf(
+            BottomToggle.CANDIDATES_WINDOW to ActionHandleAnchor.SURFACE_START,
+            BottomToggle.FLOATING_KEYBOARD to ActionHandleAnchor.AFTER_CANDIDATES_WINDOW_TOGGLE,
+            BottomToggle.TOOLBAR to ActionHandleAnchor.SURFACE_END,
+        )
+    }
+
+/** Margins of one bottom handle, in pixels. */
+internal data class HandleMargins(
+    val start: Int,
+    val end: Int,
+    val bottom: Int,
+)
+
+/**
+ * Margins that keep a handle at the configured distance from the screen border.
+ *
+ * Modern phones have rounded corners, and the handle row is pinned to the very bottom of the
+ * surface -- which on a docked keyboard is the bottom of the screen, inside the navigation bar
+ * area. Without a margin the corner-most handles get clipped by the rounded corner and lose
+ * part of their touch target.
+ *
+ * Only a handle pinned to a corner carries the horizontal margin. A chained handle follows a
+ * neighbour that already carries it, so giving it one too would double the gap.
+ */
+internal fun handleMargins(anchor: ActionHandleAnchor, margin: Int): HandleMargins =
+    HandleMargins(
+        start = if (anchor == ActionHandleAnchor.SURFACE_START) margin else 0,
+        end = if (anchor == ActionHandleAnchor.SURFACE_END) margin else 0,
+        bottom = margin,
+    )
+
 /** Lets a floating keyboard move with two fingers even when keys fill its surface. */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 private class FloatingKeyboardContainer(
@@ -346,8 +510,17 @@ class InputView(
 
     var isFloatingKeyboardEnabled = keyboardPrefs.floatingKeyboard.getValue()
         private set
-    private val floatingKeyboardBaseWidth = keyboardPrefs.floatingKeyboardWidth.getValue()
-    private val floatingKeyboardBaseHeight = keyboardPrefs.floatingKeyboardHeight.getValue()
+    /**
+     * Percentage the surface would occupy with no extra scaling, i.e. the value the scale
+     * factors are expressed against.
+     *
+     * Mutable on purpose: after a resize the drag *persists* new percentages, and the surface
+     * is then rebuilt at those percentages with `scale = 1`. If these stayed pinned to the
+     * values captured at construction, the next resize would apply the new ratio on top of an
+     * already-scaled surface and the size would run away. See [handleFloatingResize].
+     */
+    private var floatingKeyboardBaseWidth = keyboardPrefs.floatingKeyboardWidth.getValue()
+    private var floatingKeyboardBaseHeight = keyboardPrefs.floatingKeyboardHeight.getValue()
     private var floatingKeyboardWidth = floatingKeyboardBaseWidth
     private var floatingKeyboardHeight = floatingKeyboardBaseHeight
     private val floatingPreeditOffsetX = keyboardPrefs.floatingPreeditOffsetX.getValue()
@@ -425,10 +598,11 @@ class InputView(
     private var lastAppearanceState = Triple(false, false, false)
 
     private fun broadcastKeyAppearanceUpdate() {
-        val composing = rime.run { statusCached.isComposing }
-        val hasMenu = rime.run { hasMenu }
-        val paging = rime.run { paging }
-        val current = Triple(composing, hasMenu, paging)
+        // Read through the cached accessors rather than rime.run { }: this runs on every rime
+        // message, and a keystroke produces several of them, so three runBlocking round trips
+        // per message added up to over a dozen stalls of the UI thread per keypress. The cached
+        // properties read @Volatile snapshots and never touch the native layer.
+        val current = Triple(rime.status.isComposing, rime.hasMenu, rime.paging)
         if (current != lastAppearanceState) {
             lastAppearanceState = current
             broadcaster.onKeyAppearanceUpdate(current.first, current.second, current.third)
@@ -441,6 +615,10 @@ class InputView(
                 if (context.isLandscapeMode()) keyboardBottomPaddingLandscape else keyboardBottomPadding
             return dp(value)
         }
+
+    /** Distance kept between the bottom handle row (grips and toggles) and the surface edges. */
+    private val bottomHandleMarginPx: Int
+        get() = dp(keyboardPrefs.bottomToggleMargin.getValue())
 
     val keyboardView: View
 
@@ -483,10 +661,44 @@ class InputView(
             dispatchKeyboardCommand("switch_floating_keyboard")
         }
     }
+    private val candidatesWindowToggleHandle = FloatingActionHandle(context).apply {
+        setOnClickListener {
+            dispatchKeyboardCommand("switch_candidates_window")
+        }
+    }
 
     private fun dispatchKeyboardCommand(command: String) {
         commonKeyboardActionListener.listener.onAction(KeyActionManager.getCommandAction(command))
     }
+
+    /**
+     * The width the floating width percentage is measured against: the screen's **short** side.
+     *
+     * A rotation swaps the window's width and height, so a share of the window itself would mean
+     * two different physical sizes for one setting — the keyboard ends up filling a landscape
+     * screen and looking tiny in portrait. The short side is the one dimension a rotation leaves
+     * alone, which is what makes the chosen width hold still across the turn.
+     */
+    private fun referenceWidthPx(): Int {
+        val metrics = resources.displayMetrics
+        return minOf(metrics.widthPixels, metrics.heightPixels)
+    }
+
+    /** The share [minWidthPercent] of the reference width, floored by an absolute size. */
+    private fun minWidthPercent(): Int =
+        minWidthPercentFor(
+            minWidthDp = FLOATING_KEYBOARD_MIN_WIDTH_DP,
+            referenceWidthPx = referenceWidthPx(),
+            density = resources.displayMetrics.density,
+        ).coerceAtLeast(MIN_FLOATING_KEYBOARD_WIDTH_PERCENT)
+
+    /** Converts the stored width share into the share the layout has to use. */
+    private fun layoutWidthPercent(widthPercent: Int): Int =
+        widthPercentForLayout(
+            widthPercent = widthPercent,
+            referenceWidthPx = referenceWidthPx(),
+            windowWidthPx = width,
+        )
 
     private fun handleFloatingResize(event: MotionEvent) {
         when (event.actionMasked) {
@@ -510,7 +722,7 @@ class InputView(
                     resizeStartWidthPercent,
                     (resizeStartWidth * resizeStartScaleX).roundToInt(),
                     event.rawX - resizeDownRawX,
-                    60,
+                    minWidthPercent(),
                     100,
                 )
                 resizedHeight = resizedPercent(
@@ -520,11 +732,15 @@ class InputView(
                     70,
                     130,
                 )
-                keyboardView.scaleX = resizedWidth.toFloat() / floatingKeyboardBaseWidth
+                keyboardView.scaleX = floatingScaleX(resizedWidth, floatingKeyboardBaseWidth)
                 // The toolbar height is fixed, while the key area follows the height preference.
                 keyboardView.scaleY =
-                    1f + resizeStartHeight.toFloat() / keyboardView.height *
-                    (resizedHeight - floatingKeyboardBaseHeight) / floatingKeyboardBaseHeight.toFloat()
+                    floatingScaleY(
+                        resizedHeight,
+                        floatingKeyboardBaseHeight,
+                        keyboardView.height,
+                        resizeStartHeight,
+                    )
                 applyFloatingPosition(
                     keyboardView.translationX,
                     keyboardView.translationY,
@@ -534,7 +750,19 @@ class InputView(
             MotionEvent.ACTION_UP -> {
                 floatingKeyboardWidth = resizedWidth
                 floatingKeyboardHeight = resizedHeight
+                // The surface is now persisted at these percentages, so they *are* the baseline:
+                // the width reaches them through the layout (the preference drives the measured
+                // width), and the height has no layout carrier at all, so it still has to be
+                // expressed as a scale. Pinning the baseline here is what keeps a second resize
+                // from compounding onto the previous one.
+                floatingKeyboardBaseWidth = resizedWidth
+                floatingKeyboardBaseHeight = resizedHeight
+                keyboardView.updateLayoutParams<LayoutParams> {
+                    matchConstraintPercentWidth = layoutWidthPercent(resizedWidth) / 100f
+                }
+                keyboardView.doOnLayout { applyFloatingScale() }
                 service.updateFloatingKeyboardSize(resizedWidth, resizedHeight)
+                service.requestInputInsetsUpdate()
             }
             MotionEvent.ACTION_CANCEL -> {
                 keyboardView.scaleX = resizeStartScaleX
@@ -546,6 +774,35 @@ class InputView(
                 )
             }
         }
+    }
+
+    /**
+     * Pushes the persisted size preferences onto the surface as `scaleX` / `scaleY`.
+     *
+     * The width is also carried by the layout ([`matchConstraintPercentWidth`]), so its scale is
+     * normally identity and only differs while the container still measures at the previous
+     * percentage. The height has no layout carrier -- the key grid's height comes from the theme,
+     * not from a preference -- so this scale is the *only* thing that keeps the height preference
+     * alive across a rebuild. Without it a rebuild silently drops back to the baseline height
+     * while the width is honoured, which reads as "the keyboard's proportions are wrong".
+     */
+    private fun applyFloatingScale() {
+        if (!isFloatingKeyboardEnabled || keyboardView.width == 0 || keyboardView.height == 0) return
+        keyboardView.pivotX = 0f
+        keyboardView.pivotY = 0f
+        keyboardView.scaleX = 1f
+        keyboardView.scaleY =
+            floatingScaleY(
+                floatingKeyboardHeight,
+                floatingKeyboardBaseHeight,
+                keyboardView.height,
+                windowManager.view.height,
+            )
+        applyFloatingPosition(
+            keyboardView.translationX,
+            keyboardView.translationY,
+            persist = false,
+        )
     }
 
     private fun syncFloatingPreeditPosition() {
@@ -722,13 +979,13 @@ class InputView(
 
         keyboardView.updateLayoutParams<LayoutParams> {
             width = if (enabled) 0 else matchParent
-            matchConstraintPercentWidth = if (enabled) floatingKeyboardWidth / 100f else 1f
+            matchConstraintPercentWidth = if (enabled) layoutWidthPercent(floatingKeyboardWidth) / 100f else 1f
             bottomMargin = if (enabled) dp(18) else 0
         }
 
         if (enabled) {
-            keyboardView.scaleX = 1f
-            keyboardView.scaleY = 1f
+            keyboardView.translationX = 0f
+            keyboardView.translationY = 0f
         } else {
             keyboardView.translationX = 0f
             keyboardView.translationY = 0f
@@ -754,6 +1011,9 @@ class InputView(
             }
             if (enabled) {
                 keyboardView.post {
+                    // The card is measured now, so the persisted height percentage can be put
+                    // back on the freshly measured surface.
+                    applyFloatingScale()
                     applyFloatingPosition(
                         keyboardPrefs.floatingKeyboardOffsetX.getValue().toFloat(),
                         keyboardPrefs.floatingKeyboardOffsetY.getValue().toFloat(),
@@ -806,30 +1066,80 @@ class InputView(
             setGripColor(scope.colors.keyboardBackColor)
         }
         if (moveHandle.parent == null) {
-            surface.add(moveHandle, lParams(dp(36), dp(36)) {
-                startOfParent()
-                bottomOfParent()
-            })
+            surface.add(moveHandle, lParams(dp(36), dp(36)) { bottomOfParent() })
         }
         if (inputBarToggleHandle.parent == null) {
-            surface.add(inputBarToggleHandle, lParams(dp(36), dp(36)) {
-                startToEndOf(moveHandle)
-                bottomOfParent()
-            })
+            surface.add(inputBarToggleHandle, lParams(dp(36), dp(36)) { bottomOfParent() })
         }
         if (floatingModeToggleHandle.parent == null) {
-            surface.add(floatingModeToggleHandle, lParams(dp(36), dp(36)) {
-                startToEndOf(inputBarToggleHandle)
-                bottomOfParent()
-            })
+            surface.add(floatingModeToggleHandle, lParams(dp(36), dp(36)) { bottomOfParent() })
+        }
+        if (candidatesWindowToggleHandle.parent == null) {
+            surface.add(candidatesWindowToggleHandle, lParams(dp(36), dp(36)) { bottomOfParent() })
         }
         if (resizeHandle.parent == null) {
-            surface.add(resizeHandle, lParams(dp(36), dp(36)) {
-                endOfParent()
-                bottomOfParent()
-            })
+            surface.add(resizeHandle, lParams(dp(36), dp(36)) { bottomOfParent() })
         }
+        // Both the anchors and the edge margin depend on state that can change at runtime (the
+        // mode, and the margin preference), so the whole bottom row is placed here instead of
+        // in the layout params it was added with.
+        placeBottomHandles(enabled)
         updateFloatingActionHandles()
+    }
+
+    /**
+     * Places the bottom row: the two floating grips and the three toggles.
+     *
+     * The toggles spread out differently per mode, and every handle keeps
+     * [bottomHandleMarginPx] away from the surface edges, so a rounded screen corner cannot
+     * clip it or eat its taps.
+     */
+    private fun placeBottomHandles(floating: Boolean) {
+        val margin = bottomHandleMarginPx
+        moveHandle.updateLayoutParams<ConstraintLayout.LayoutParams> {
+            anchorTo(ActionHandleAnchor.SURFACE_START, margin)
+        }
+        resizeHandle.updateLayoutParams<ConstraintLayout.LayoutParams> {
+            anchorTo(ActionHandleAnchor.SURFACE_END, margin)
+        }
+        actionHandleAnchors(floating).forEach { (toggle, anchor) ->
+            val handle = when (toggle) {
+                BottomToggle.CANDIDATES_WINDOW -> candidatesWindowToggleHandle
+                BottomToggle.FLOATING_KEYBOARD -> floatingModeToggleHandle
+                BottomToggle.TOOLBAR -> inputBarToggleHandle
+            }
+            handle.updateLayoutParams<ConstraintLayout.LayoutParams> { anchorTo(anchor, margin) }
+        }
+    }
+
+    /**
+     * Pins the handle to the bottom edge, at the requested horizontal anchor.
+     *
+     * The margins go through the *relative* [marginStart] / [marginEnd] properties on purpose:
+     * the splitties helpers used here write absolute margins (and `endOfParent` writes
+     * `rightMargin` directly), which the start/end resolution that runs on every
+     * `setLayoutParams` would then overwrite with zero. Only a handle pinned to a corner keeps
+     * the edge margin -- a chained one follows a neighbour that already carries it.
+     */
+    private fun ConstraintLayout.LayoutParams.anchorTo(anchor: ActionHandleAnchor, margin: Int) {
+        // Clear first: an anchor left over from the previous placement must not survive.
+        startToStart = ConstraintLayout.LayoutParams.UNSET
+        startToEnd = ConstraintLayout.LayoutParams.UNSET
+        endToStart = ConstraintLayout.LayoutParams.UNSET
+        endToEnd = ConstraintLayout.LayoutParams.UNSET
+        when (anchor) {
+            ActionHandleAnchor.SURFACE_START -> startOfParent()
+            ActionHandleAnchor.SURFACE_END -> endOfParent()
+            ActionHandleAnchor.AFTER_DRAG_GRIP -> startToEndOf(moveHandle)
+            ActionHandleAnchor.AFTER_CANDIDATES_WINDOW_TOGGLE -> startToEndOf(candidatesWindowToggleHandle)
+            ActionHandleAnchor.AFTER_FLOATING_KEYBOARD_TOGGLE -> startToEndOf(floatingModeToggleHandle)
+            ActionHandleAnchor.AFTER_TOOLBAR_TOGGLE -> startToEndOf(inputBarToggleHandle)
+        }
+        bottomOfParent()
+        val margins = handleMargins(anchor, margin)
+        marginStart = margins.start
+        marginEnd = margins.end
+        bottomMargin = margins.bottom
     }
 
     private fun updateFloatingActionHandles() {
@@ -863,6 +1173,31 @@ class InputView(
             visibility =
                 if (!isFloatingKeyboardEnabled || toolbarHidden) View.VISIBLE else View.GONE
         }
+        val candidatesWindowEnabled = candidatesMode != PopupCandidatesMode.DISABLED
+        candidatesWindowToggleHandle.apply {
+            setAction(
+                if (candidatesWindowEnabled) {
+                    R.drawable.ic_baseline_deselect_24
+                } else {
+                    R.drawable.ic_baseline_list_alt_24
+                },
+                context.getString(
+                    if (candidatesWindowEnabled) R.string.hide_candidates_window else R.string.show_candidates_window,
+                ),
+                handleTint,
+            )
+            visibility = View.VISIBLE
+        }
+    }
+
+    /** Re-reads the candidate window mode, which the bottom toggle mirrors. */
+    fun refreshCandidatesWindowToggle() {
+        updateFloatingActionHandles()
+    }
+
+    /** Re-applies the bottom handle margin, which the settings screen changes at runtime. */
+    fun refreshBottomHandleMargin() {
+        placeBottomHandles(isFloatingKeyboardEnabled)
     }
 
     /** Restyles colors after a scheme switch without rebuilding the view tree. */
@@ -971,7 +1306,7 @@ class InputView(
                 centerHorizontally()
                 bottomOfParent()
                 if (isFloatingKeyboardEnabled) {
-                    matchConstraintPercentWidth = floatingKeyboardWidth / 100f
+                    matchConstraintPercentWidth = layoutWidthPercent(floatingKeyboardWidth) / 100f
                     bottomMargin = dp(18)
                 }
             },
@@ -982,6 +1317,9 @@ class InputView(
         }
         if (isFloatingKeyboardEnabled) {
             keyboardView.post {
+                // Re-apply the persisted height percentage: the key grid's height comes from the
+                // theme, so nothing else would carry it across this rebuild.
+                applyFloatingScale()
                 applyFloatingPosition(
                     keyboardPrefs.floatingKeyboardOffsetX.getValue().toFloat(),
                     keyboardPrefs.floatingKeyboardOffsetY.getValue().toFloat(),

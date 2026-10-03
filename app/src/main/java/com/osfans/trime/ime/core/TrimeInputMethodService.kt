@@ -109,6 +109,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         prefs.keyboard.hideKeySymbol,
         prefs.keyboard.hideKeyHint,
         prefs.keyboard.hideInputBar,
+        prefs.keyboard.bottomToggleMargin,
         prefs.advanced.ignoreSystemGestureInsets,
     )
 
@@ -134,6 +135,9 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
                     }
                 }
 
+                // Only the margins of the bottom row move, so no rebuild is needed.
+                AppPrefs.Keyboard.BOTTOM_TOGGLE_MARGIN -> inputView?.refreshBottomHandleMargin()
+
                 else -> themeScope?.let { replaceInputView(it) }
             }
         }
@@ -158,8 +162,24 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
 
     @Keep
     private val recreateCandidatesViewListener =
-        PreferenceDelegateProvider.OnChangeListener {
+        PreferenceDelegateProvider.OnChangeListener { key ->
             themeScope?.let { replaceCandidateView(it) }
+            // The bottom toggle mirrors the mode, so it has to follow a change made in Settings.
+            if (key == AppPrefs.Candidates.MODE) {
+                inputView?.refreshCandidatesWindowToggle()
+            }
+        }
+
+    /** Prefs that only resize the popup candidate window's row, so no rebuild is needed. */
+    private val refreshCandidatesRowPrefs: Array<PreferenceDelegate<*>> = arrayOf(
+        prefs.keyboard.maxSpanCount,
+        prefs.keyboard.maxSpanCountLandscape,
+    )
+
+    @Keep
+    private val refreshCandidatesRowListener =
+        PreferenceDelegate.OnChangeListener<Any> { _, _ ->
+            candidatesView?.refreshSlotLayout()
         }
 
     @Keep
@@ -237,6 +257,9 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
             it.registerOnChangeListener(recreateInputViewListener)
         }
         prefs.candidates.registerOnChangeListener(recreateCandidatesViewListener)
+        refreshCandidatesRowPrefs.forEach {
+            it.registerOnChangeListener(refreshCandidatesRowListener)
+        }
         // ensure theme and color managers are initialized after rime is ready
         lifecycleScope.launch {
             rime.runOnReady {
@@ -354,6 +377,9 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         } else {
             candidatesView?.updateCursorAnchor(contentSize)
         }
+        // A rebuilt view starts ignorant of the keyboard next to it, so hand the current
+        // bounds over rather than waiting for the next input-view layout.
+        syncCandidatesObstruction()
         return newCandidatesView
     }
 
@@ -362,6 +388,55 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         replaceInputView(scope)
         replaceCandidateView(scope)
         inputView?.updateEnterKeyLabel(currentInputEditorInfo)
+    }
+
+    /**
+     * Re-applies the candidate window mode to the views that are already on screen.
+     *
+     * The mode only decides what the *next* evaluation picks, so a toggle pressed while the
+     * keyboard is up has to ask for one explicitly. This is the evaluation a tap on the input
+     * view triggers, and tapping the toggle is exactly that kind of interaction.
+     */
+    fun refreshCandidatesViewMode() {
+        inputDeviceManager.evaluateOnViewClicked(this)
+        // Whether the window exists at all just changed, so does what it has to avoid.
+        syncCandidatesObstruction()
+    }
+
+    private val contentLocationInWindow = intArrayOf(0, 0)
+    private val floatingObstruction = RectF()
+
+    /**
+     * Hands [CandidatesView] the region it has to keep clear of.
+     *
+     * While the keyboard is docked, [updateDecorLocation] already confines the candidate
+     * window to the area above the keyboard by reporting the keyboard's top as the parent
+     * height. Nothing plays that role once the keyboard floats: it overlays the editor, so the
+     * cursor anchor can land inside the keyboard and the window would be drawn over the keys.
+     * [InputView.getFloatingKeyboardBoundsInWindow] is the same rectangle the window manager
+     * gets as the touchable region, and it already includes the floating preedit.
+     */
+    private fun syncCandidatesObstruction() {
+        val cv = candidatesView ?: return
+        val iv = inputView
+        val bounds = Rect()
+        val floating =
+            iv != null &&
+                inputDeviceManager.useCandidatesView &&
+                iv.isFloatingKeyboardEnabled &&
+                iv.getFloatingKeyboardBoundsInWindow(bounds)
+        if (!floating) {
+            cv.setObstruction(null)
+            return
+        }
+        contentView.getLocationInWindow(contentLocationInWindow)
+        floatingObstruction.set(
+            (bounds.left - contentLocationInWindow[0]).toFloat(),
+            (bounds.top - contentLocationInWindow[1]).toFloat(),
+            (bounds.right - contentLocationInWindow[0]).toFloat(),
+            (bounds.bottom - contentLocationInWindow[1]).toFloat(),
+        )
+        cv.setObstruction(floatingObstruction)
     }
 
     /** Set once [onDestroy] has run; guards work that resumes after a suspension. */
@@ -378,6 +453,9 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
             it.unregisterOnChangeListener(recreateInputViewListener)
         }
         prefs.candidates.unregisterOnChangeListener(recreateCandidatesViewListener)
+        refreshCandidatesRowPrefs.forEach {
+            it.unregisterOnChangeListener(refreshCandidatesRowListener)
+        }
         ThemeManager.removeOnChangedListener(onThemeChangeListener)
         ColorManager.removeOnChangedListener(onColorChangeListener)
         super.onDestroy()
@@ -567,6 +645,10 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
                 touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
             }
         }
+        // This callback is the framework's, and InputView only asks for another round when the
+        // floating keyboard's bounds actually changed, so it doubles as the signal that the
+        // candidate window has to be re-placed relative to the keyboard.
+        syncCandidatesObstruction()
     }
 
     // always show InputView since we delegate CandidatesView's visibility to it
@@ -1037,7 +1119,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
     }
 
     fun getActiveText(type: Int): String {
-        val rimeComposition = rime.run { compositionCached }
+        val rimeComposition = rime.composition
         val selected = currentInputConnection?.getSelectedText(0)?.toString()
         val commitPreview = rimeComposition.commitTextPreview
         val preedit = rimeComposition.preedit ?: ""

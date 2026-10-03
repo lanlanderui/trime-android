@@ -77,11 +77,25 @@ class Key(
     var keyPressOffsetX = 0f
     var keyPressOffsetY = 0f
 
+    /** The built-in dynamic scheme is the active one. Cached per colour-scheme generation. */
+    private val dynamicPalette: Boolean by schemeColor { ColorManager.isDynamicSchemeActive }
+
+    /**
+     * Whether a colour the theme binds to this one key still applies.
+     *
+     * Not under the dynamic scheme. That scheme paints keys by kind — see [appearanceType] — so a
+     * keyboard's `style: {key_back_color: bgn}` would have to be honoured for shift, backspace and
+     * return to keep a theme's own look, and ignoring it is what leaves every one of them reading
+     * as the same function key. The two palettes are also unrelated: `bgn` is whatever the theme
+     * chose, the scheme's colours come from the wallpaper.
+     */
+    private val useThemedKeyColors: Boolean get() = !dynamicPalette
+
     // get color from key customization or just fallback to specified color
     private fun getColor(
         src: TextKeyboard.TextKey.() -> String,
         fallback: String,
-    ): Int = selfConfig?.let {
+    ): Int = selfConfig?.takeIf { useThemedKeyColors }?.let {
         runCatching { ColorManager.getColor(src(it)) }.getOrNull()
     } ?: ColorManager.getColor(fallback)
 
@@ -91,10 +105,24 @@ class Key(
         @ColorInt default: Int,
     ): Int = runCatching { ColorManager.getColor(key) }.getOrDefault(default)
 
+    /**
+     * A colour a theme binds to this one key, or [fallback] when the theme may not have its way.
+     *
+     * Same rule as [useThemedKeyColors], for the function-key palettes that read the theme's
+     * per-key colour by name instead of through [getDrawable].
+     */
+    private fun themedKeyColor(
+        src: TextKeyboard.TextKey.() -> String,
+        fallback: Int,
+    ): Int {
+        val key = selfConfig?.takeIf { useThemedKeyColors }?.let { src(it) }
+        return if (key.isNullOrEmpty()) fallback else getColor(key, fallback)
+    }
+
     private fun getDrawable(
         src: TextKeyboard.TextKey.() -> String,
         fallback: String,
-    ) = selfConfig?.let {
+    ) = selfConfig?.takeIf { useThemedKeyColors }?.let {
         if (src(it).isEmpty()) null else ColorManager.getDrawable(src(it))
     } ?: ColorManager.getDrawable(fallback)
 
@@ -302,10 +330,30 @@ class Key(
     val symbolLabel: String
         get() = labelSymbol.ifEmpty { longClick?.getLabel(parent) ?: "" }
 
+    /**
+     * Which of the three key palettes this key draws from.
+     *
+     * Outside the dynamic scheme the theme decides, and behaviour is the only thing left to sort
+     * keys by: `2` for a modifier that is currently on, `1` for a sticky or functional key, `0`
+     * for the rest, each backed by the theme's per-key colours.
+     *
+     * The dynamic scheme has no per-key colours to consult (see [useThemedKeyColors]), so it has
+     * to sort keys by what they type — [keyPaletteOf] — or a key its author never named would
+     * have no colour at all. The on/modifier state keeps its own palette either way, so shift
+     * still lights up while it is held.
+     */
     private val appearanceType: Int
         get() {
+            val modifierActive = click?.isModifierKey == true && parent.modifier.hasFlag(click!!.modifierKeyOnMask)
             return when {
-                click?.isModifierKey == true && parent.modifier.hasFlag(click!!.modifierKeyOnMask) || isOn -> 2
+                isOn || modifierActive -> 2
+
+                dynamicPalette ->
+                    when (keyPaletteOf(click?.text.orEmpty(), code)) {
+                        KeyPalette.TEXT -> 0
+                        KeyPalette.FUNCTION -> 1
+                    }
+
                 click?.isSticky == true || click?.isFunctional == true -> 1
                 else -> 0
             }
@@ -318,7 +366,13 @@ class Key(
             if (isPressed) {
                 hlOffKeyBackground
             } else {
-                selfConfig?.keyBackColor.takeIf { !it.isNullOrEmpty() }?.let { keyBackground }
+                // The theme's per-key colour, when it is allowed to apply at all: it is not (see
+                // [useThemedKeyColors]), and it is not part of the function palette.
+                selfConfig
+                    ?.takeIf { useThemedKeyColors }
+                    ?.keyBackColor
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { keyBackground }
                     ?: offKeyBackground
             }
         }
@@ -328,19 +382,19 @@ class Key(
 
     fun getBorderColor(): Int = when (appearanceType) {
         2 -> if (isPressed) hlOnKeyBorderColor else onKeyBorderColor
-        1 -> if (isPressed) hlOffKeyBorderColor else getColor(selfConfig?.keyBorderColor ?: "", offKeyBorderColor)
+        1 -> if (isPressed) hlOffKeyBorderColor else themedKeyColor({ keyBorderColor }, offKeyBorderColor)
         else -> if (isPressed) hlKeyBorderColor else keyBorderColor
     }
 
     fun getTextColor(): Int = when (appearanceType) {
         2 -> if (isPressed) hlOnKeyTextColor else onKeyTextColor
-        1 -> if (isPressed) hlOffKeyTextColor else getColor(selfConfig?.keyTextColor ?: "", offKeyTextColor)
+        1 -> if (isPressed) hlOffKeyTextColor else themedKeyColor({ keyTextColor }, offKeyTextColor)
         else -> if (isPressed) hlKeyTextColor else keyTextColor
     }
 
     fun getSymbolColor(): Int = when (appearanceType) {
         2 -> if (isPressed) hlOnKeySymbolColor else onKeySymbolColor
-        1 -> if (isPressed) hlOffKeySymbolColor else getColor(selfConfig?.keySymbolColor ?: "", offKeySymbolColor)
+        1 -> if (isPressed) hlOffKeySymbolColor else themedKeyColor({ keySymbolColor }, offKeySymbolColor)
         else -> if (isPressed) hlKeySymbolColor else keySymbolColor
     }
 }

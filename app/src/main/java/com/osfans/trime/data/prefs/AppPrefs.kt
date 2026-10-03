@@ -131,6 +131,7 @@ class AppPrefs(
 
             const val USE_SOFT_CURSOR = "use_soft_cursor"
             const val HIDE_INPUT_BAR = "hide_input_bar"
+            const val BOTTOM_TOGGLE_MARGIN = "bottom_toggle_margin"
             const val HIDE_KEY_SYMBOL = "hide_key_symbol"
             const val HIDE_KEY_HINT = "hide_key_hint"
 
@@ -185,7 +186,10 @@ class AppPrefs(
             R.string.floating_keyboard_width,
             FLOATING_KEYBOARD_WIDTH,
             86,
-            60,
+            // The drag handle stops at FLOATING_KEYBOARD_MIN_WIDTH_DP, which on a typical phone
+            // lands around 40% of the screen's short side. Keeping the slider's floor below that
+            // means a width reached by dragging is never shown as something else in settings.
+            40,
             100,
             "%",
             2,
@@ -233,6 +237,14 @@ class AppPrefs(
         val useSoftCursor = switch(R.string.use_soft_cursor, USE_SOFT_CURSOR, true)
 
         val hideInputBar = switch(R.string.hide_input_bar, HIDE_INPUT_BAR, false)
+        val bottomToggleMargin = int(
+            R.string.bottom_toggle_margin,
+            BOTTOM_TOGGLE_MARGIN,
+            0,
+            0,
+            48,
+            "dp",
+        )
         val hideKeySymbol = switch(R.string.hide_key_symbol, HIDE_KEY_SYMBOL, false)
         val hideKeyHint = switch(R.string.hide_key_hint, HIDE_KEY_HINT, false)
 
@@ -399,11 +411,83 @@ class AppPrefs(
             const val MODE = "show_candidates_window"
             const val LAYOUT = "candidates_layout"
             const val POSITION = "candidates_window_position"
+            const val BACKGROUND_ALPHA = "candidates_window_background_alpha"
+            const val ITEM_BACKGROUND = "candidates_item_background"
+            const val ITEM_SPACING = "candidates_item_spacing"
+            const val ITEM_BACKGROUND_ALPHA = "candidates_item_background_alpha"
         }
 
         val mode = enum(R.string.show_candidates_window, MODE, PopupCandidatesMode.DISABLED)
         val layout = enum(R.string.candidates_layout, LAYOUT, PopupCandidatesLayout.AUTOMATIC)
         val position = enum(R.string.candidates_window_position, POSITION, PopupPosition.BOTTOM_LEFT)
+
+        /**
+         * Opacity of the window's own background, in percent.
+         *
+         * The window floats over the editor, so the background is what hides the text behind it;
+         * fading it (the text and the highlighted item stay opaque) buys readability for the app
+         * underneath. 100% is the theme's own look.
+         */
+        val backgroundAlpha = int(
+            R.string.candidates_window_background_alpha,
+            BACKGROUND_ALPHA,
+            100,
+            0,
+            100,
+            "%",
+        )
+
+        /**
+         * Whether the candidates other than the highlighted one get a background of their own.
+         *
+         * Only the highlighted candidate is coloured by default, because that colour is what
+         * makes the current selection stand out; giving the others a fill as well turns the row
+         * into a strip of blocks, which reads as "all of these are selected". The fill is drawn in
+         * the theme's separator colour, so it stays subordinate to the highlight and follows a
+         * scheme switch. Off keeps the theme's original look.
+         */
+        val itemBackground = switch(
+            R.string.candidates_item_background,
+            ITEM_BACKGROUND,
+            false,
+            R.string.candidates_item_background_summary,
+        )
+
+        /**
+         * Gap between the candidates of the row, in dp, on **each** side of every candidate.
+         *
+         * Independent of [itemBackground] on purpose: an item drawn with a fill but no gap runs
+         * into its neighbour and the row reads as one continuous block, so the candidates stop
+         * looking individually selectable. The gap is a layout property, though, so it also makes
+         * sense without a fill -- hence a switch of its own rather than a side effect of the
+         * other one. 0dp means "as tight as the theme has it", which is the original behaviour.
+         */
+        val itemSpacing = int(
+            R.string.candidates_item_spacing,
+            ITEM_SPACING,
+            2,
+            0,
+            16,
+            "dp",
+        )
+
+        /**
+         * Opacity of the *non-highlighted* candidates' own fill, in percent.
+         *
+         * The fill's colour comes from the theme, which is free to pick something strong -- or to
+         * make it deliberately translucent. This scales that colour's own alpha rather than
+         * replacing it, so 100% leaves the theme's choice alone and a lower value dims it further.
+         * Only the unhighlighted fill is affected; the highlighted candidate stays at full strength,
+         * since that contrast is what marks the selection.
+         */
+        val itemBackgroundAlpha = int(
+            R.string.candidates_item_background_alpha,
+            ITEM_BACKGROUND_ALPHA,
+            100,
+            0,
+            100,
+            "%",
+        )
     }
 
     /**

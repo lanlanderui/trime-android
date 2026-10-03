@@ -68,6 +68,23 @@ internal object ColorSchemeResolver {
     }
 
     /**
+     * The scheme a theme shows on its own for the given day/night state: its `default` preset,
+     * following that preset's own day/night links.
+     *
+     * The built-in dynamic scheme is layered on top of this rather than standing alone, because a
+     * theme is free to name colour keys of its own and bind them per key in its keyboards. Such a
+     * reference only has a value while some scheme in play defines the key, and the built-in one
+     * knows nothing about names it did not invent itself.
+     *
+     * @param schemes color schemes of a theme that is known to be usable; [ThemeLoader] refuses a
+     *   theme declaring none, so this list is never empty.
+     */
+    fun themeBaseline(
+        schemes: List<ColorScheme>,
+        isNightMode: Boolean,
+    ): ColorScheme = resolve(schemes, DEFAULT_SCHEME, followSystemDayNight = true, isNightMode)
+
+    /**
      * The full list a picker offers: the theme's presets plus the built-in dynamic scheme.
      *
      * The dynamic scheme is not a preset, so this is the only thing that keeps it selectable

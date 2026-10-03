@@ -47,11 +47,17 @@ object CollectionHelper : CoroutineScope by CoroutineScope(SupervisorJob() + Dis
 
     suspend fun delete(id: Int) = cltDao.delete(id)
 
-    suspend fun deleteAll(skipPinned: Boolean = true) {
-        if (skipPinned) {
-            cltDao.deleteAllUnpinned()
-        } else {
+    /**
+     * Deletes collection entries.
+     *
+     * Mirrors [ClipboardHelper.deleteAll]: pinned entries survive unless [BulkDeleteScope.ALL] is
+     * passed explicitly.
+     */
+    suspend fun deleteAll(scope: BulkDeleteScope = BulkDeleteScope.KEEP_PINNED) {
+        if (scope.removesPinned) {
             cltDao.deleteAll()
+        } else {
+            cltDao.deleteAllUnpinned()
         }
     }
 

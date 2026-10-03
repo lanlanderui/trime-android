@@ -22,6 +22,7 @@ import com.osfans.trime.data.theme.ColorManager
 import com.osfans.trime.data.theme.KeyActionManager
 import com.osfans.trime.data.theme.LiquidData
 import com.osfans.trime.data.theme.ThemeManager
+import com.osfans.trime.ime.candidates.popup.PopupCandidatesMode
 import com.osfans.trime.ime.clipboard.ClipboardWindow
 import com.osfans.trime.ime.core.TrimeInputMethodService
 import com.osfans.trime.ime.dialog.EnabledSchemaPickerDialog
@@ -197,6 +198,7 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                     "switch_hide_key_hint" -> switchHideKeyHint()
                     "switch_floating_keyboard" -> switchFloatingKeyboard()
                     "switch_hide_input_bar" -> switchHideInputBar()
+                    "switch_candidates_window" -> switchCandidatesWindow()
                     else -> handleIntentAction(action.command, arg)
                 }
             }
@@ -341,6 +343,22 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
                 preference.setValue(!preference.getValue())
             }
 
+            /**
+             * 切換候選窗口（實體鍵盤時取代軟鍵盤的那個浮動候選欄）。
+             *
+             * 偏好只有「跟隨系統 / 跟隨輸入設備 / 始終顯示 / 禁用」四種取值，開關只負責在
+             * 「禁用」與「始終顯示」之間來回切換。改完必須請服務重新評估一次視圖可見性 ——
+             * 光改偏好要等到下一次 `onStartInputView` 才會生效。
+             */
+            private fun switchCandidatesWindow() {
+                val preference = prefs.candidates.mode
+                val enabled = preference.getValue() != PopupCandidatesMode.DISABLED
+                preference.setValue(
+                    if (enabled) PopupCandidatesMode.DISABLED else PopupCandidatesMode.ALWAYS_SHOW,
+                )
+                service.refreshCandidatesViewMode()
+            }
+
             private fun handleSettings(action: KeyAction) {
                 when (action.option) {
                     "theme" -> showThemePicker()
@@ -448,7 +466,7 @@ class CommonKeyboardActionListener(override val di: DI) : DIAware {
             override fun onText(input: String) {
                 if (input.isEmpty()) return
                 Timber.d("onText: $input")
-                val status = rime.run { statusCached }
+                val status = rime.status
                 if (!input[0].isAsciiPrintable() && status.isComposing) {
                     service.postRimeJob { commitComposition() }
                 }

@@ -214,9 +214,16 @@
     <string name="top_left">左上</string>
     <string name="top_right">右上</string>
     <string name="candidates_window_position">候選詞視窗位置</string>
+    <string name="candidates_window_background_alpha">候選視窗背景不透明度</string>
+    <string name="candidates_item_background">候選項背景色</string>
+    <string name="candidates_item_background_summary">同時為除首個高亮項外的候選項填入背景色（使用主題分隔線色）</string>
+    <string name="candidates_item_spacing">候選項間隔</string>
+    <string name="candidates_item_background_alpha">候選項背景不透明度</string>
     <string name="deploy_failure">部署失敗</string>
     <string name="view_deploy_failure_log">部署失敗。點此檢視錯誤日誌。</string>
+    <string name="hide_candidates_window">隱藏候選視窗</string>
     <string name="hide_input_bar">隱藏輸入工具欄</string>
+    <string name="bottom_toggle_margin">底部開關邊距</string>
     <string name="hide_key_symbol">隱藏按鍵符號</string>
     <string name="hide_key_hint">隱藏按鍵註解</string>
     <string name="navbar_bkg_none">無背景</string>

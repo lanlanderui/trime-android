@@ -136,6 +136,21 @@ class ColorSchemeResolverTest :
                 e.message shouldBe "The theme defines no color scheme"
             }
         }
+        Given("the theme's own baseline for a day/night state") {
+            When("the default preset links to a dark scheme") {
+                Then("day stays on default and night takes the linked scheme") {
+                    ColorSchemeResolver.themeBaseline(fixtures, isNightMode = false).id shouldBe "default"
+                    ColorSchemeResolver.themeBaseline(fixtures, isNightMode = true).id shouldBe "steam"
+                }
+            }
+            When("the theme declares no preset called default") {
+                Then("the first preset is the baseline in both modes") {
+                    val noDefault = listOf(scheme("plain"), scheme("dusk", "light_scheme" to "dawn"), scheme("dawn"))
+                    ColorSchemeResolver.themeBaseline(noDefault, isNightMode = false).id shouldBe "plain"
+                    ColorSchemeResolver.themeBaseline(noDefault, isNightMode = true).id shouldBe "plain"
+                }
+            }
+        }
         Given("the list offered to a picker") {
             val presets = listOf(scheme("default"), scheme("plain"))
             val dynamic = scheme("dynamic")

@@ -469,6 +469,16 @@ obj/
 ### Custom ###
 # Keystore
 keystore.properties
+# `*.keystore` above does not match the suffixes AGP writes next to the key
+# (`debug.keystore.generated-backup`, `.lock`), and those hold the key itself.
+*.keystore*
+
+# 本地开发环境 —— 绝不入库：
+# 前两个是本机构建/签名用的 home，`.workbuddy/` 是本项目的开发笔记与截图。
+# 注意 `.gradle/`(已忽略) 与 `.gradle-user-home/`(GRADLE_USER_HOME) 不是同一个目录。
+.android-user-home/
+.gradle-user-home/
+.workbuddy/
 
 # Project
 app/src/main/assets/checksums.json
