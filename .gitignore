@@ -480,6 +480,13 @@ keystore.properties
 .gradle-user-home/
 .workbuddy/
 
+# 本项目的开发笔记 / 交接文档：含本机路径与设备信息，默认不入库。
+# 想公开它们的话，删掉这四行再 `git add -f <文件>` 即可。
+/APP_STATE_*.md
+/CODE_REVIEW_*.md
+/PROJECT_HANDOFF.md
+/PROJECT_PROGRESS_*.md
+
 # Project
 app/src/main/assets/checksums.json
 app/src/main/assets/shared/opencc
