@@ -110,6 +110,11 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         prefs.keyboard.hideKeyHint,
         prefs.keyboard.hideInputBar,
         prefs.keyboard.bottomToggleMargin,
+        // This array is what subscribes the listener below, and its own branch handles these two
+        // in place, so they belong here even though no rebuild is wanted: a preference that is not
+        // listed is a preference whose change is never seen until the view is built again.
+        prefs.keyboard.bottomBarEnabled,
+        prefs.keyboard.bottomBarHeight,
         prefs.advanced.ignoreSystemGestureInsets,
     )
 
@@ -137,6 +142,11 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
 
                 // Only the margins of the bottom row move, so no rebuild is needed.
                 AppPrefs.Keyboard.BOTTOM_TOGGLE_MARGIN -> inputView?.refreshBottomHandleMargin()
+
+                // The bottom bar only changes the strip's height and colour, so the view tree
+                // stays as it is; only the IME window's insets have to be recomputed.
+                AppPrefs.Keyboard.BOTTOM_BAR_ENABLED,
+                AppPrefs.Keyboard.BOTTOM_BAR_HEIGHT -> inputView?.refreshBottomBar()
 
                 else -> themeScope?.let { replaceInputView(it) }
             }

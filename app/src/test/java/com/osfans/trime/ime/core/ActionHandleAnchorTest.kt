@@ -89,23 +89,24 @@ class ActionHandleAnchorTest :
 
             Then("the bottom-left handle keeps the margin on its own side only") {
                 handleMargins(ActionHandleAnchor.SURFACE_START, margin) shouldBe
-                    HandleMargins(start = margin, end = 0, bottom = margin)
+                    HandleMargins(start = margin, end = 0)
             }
 
             Then("the bottom-right handle keeps the margin on its own side only") {
                 handleMargins(ActionHandleAnchor.SURFACE_END, margin) shouldBe
-                    HandleMargins(start = 0, end = margin, bottom = margin)
+                    HandleMargins(start = 0, end = margin)
             }
 
-            Then("a chained handle keeps the margin on the bottom only") {
+            Then("a chained handle takes no margin of its own") {
                 chained.forEach { anchor ->
-                    handleMargins(anchor, margin) shouldBe HandleMargins(start = 0, end = 0, bottom = margin)
+                    handleMargins(anchor, margin) shouldBe HandleMargins(start = 0, end = 0)
                 }
             }
 
-            Then("every handle keeps the bottom margin, whatever its anchor") {
+            Then("no anchor puts a margin on both sides at once") {
                 ActionHandleAnchor.entries.forEach { anchor ->
-                    handleMargins(anchor, margin).bottom shouldBe margin
+                    val m = handleMargins(anchor, margin)
+                    (m.start > 0 && m.end > 0) shouldBe false
                 }
             }
 
@@ -122,7 +123,7 @@ class ActionHandleAnchorTest :
 
             Then("no horizontal margin is invented when the setting is zero") {
                 ActionHandleAnchor.entries.forEach { anchor ->
-                    handleMargins(anchor, 0) shouldBe HandleMargins(start = 0, end = 0, bottom = 0)
+                    handleMargins(anchor, 0) shouldBe HandleMargins(start = 0, end = 0)
                 }
             }
 
@@ -145,6 +146,45 @@ class ActionHandleAnchorTest :
                             m.start > 0 || m.end > 0
                         }
                 corners.size shouldBe 0
+            }
+        }
+
+        // The bottom bar exists so the toggles never reach into the keys, which is exactly what a
+        // theme does when it reserves less than the toggle height for keyboard_padding_bottom.
+        // Its floor is the handle size itself: the side margin moves handles sideways only, so it
+        // must not make the strip taller -- that is what made raising the margin feel like padding
+        // all four edges at once.
+        Given("a bottom bar whose toggles are 36dp tall") {
+            val min = ACTION_HANDLE_SIZE_DP
+
+            Then("the automatic height uses the theme padding when that is generous enough") {
+                bottomBarHeightDp(configuredDp = 0, themePaddingDp = 60, minHeightDp = min) shouldBe 60
+            }
+
+            Then("the automatic height grows to fit the toggles when the theme is too small") {
+                bottomBarHeightDp(configuredDp = 0, themePaddingDp = 35, minHeightDp = min) shouldBe 36
+            }
+
+            Then("a configured height above the toggles is used as it is") {
+                bottomBarHeightDp(configuredDp = 72, themePaddingDp = 35, minHeightDp = min) shouldBe 72
+            }
+
+            Then("a configured height of exactly the handle size is kept") {
+                bottomBarHeightDp(configuredDp = 36, themePaddingDp = 35, minHeightDp = min) shouldBe 36
+            }
+
+            Then("no configured height can push the bar below the toggles") {
+                listOf(0, 1, 12, 35).forEach { configured ->
+                    bottomBarHeightDp(configured, 35, min) shouldBe 36
+                }
+            }
+
+            Then("a configured height replaces the theme padding, floor aside") {
+                bottomBarHeightDp(configuredDp = 20, themePaddingDp = 80, minHeightDp = min) shouldBe 36
+            }
+
+            Then("a negative height is treated as automatic") {
+                bottomBarHeightDp(configuredDp = -5, themePaddingDp = 40, minHeightDp = min) shouldBe 40
             }
         }
     })

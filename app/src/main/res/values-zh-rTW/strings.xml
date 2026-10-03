@@ -223,7 +223,11 @@
     <string name="view_deploy_failure_log">部署失敗。點此檢視錯誤日誌。</string>
     <string name="hide_candidates_window">隱藏候選視窗</string>
     <string name="hide_input_bar">隱藏輸入工具欄</string>
-    <string name="bottom_toggle_margin">底部開關邊距</string>
+    <string name="bottom_toggle_margin">底部開關左右邊距</string>
+    <string name="bottom_bar_enabled">獨立底部列</string>
+    <string name="bottom_bar_enabled_summary">在按鍵下方預留一條開關列，避免底部開關壓住按鍵</string>
+    <string name="bottom_bar_height">底部列高度</string>
+    <string name="bottom_bar_height_auto">自動</string>
     <string name="hide_key_symbol">隱藏按鍵符號</string>
     <string name="hide_key_hint">隱藏按鍵註解</string>
     <string name="navbar_bkg_none">無背景</string>

@@ -222,7 +222,11 @@
     <string name="view_deploy_failure_log">部署失败。点此查看错误日志。</string>
     <string name="hide_candidates_window">隐藏候选窗口</string>
     <string name="hide_input_bar">隐藏输入工具栏</string>
-    <string name="bottom_toggle_margin">底部开关边距</string>
+    <string name="bottom_toggle_margin">底部开关左右边距</string>
+    <string name="bottom_bar_enabled">独立底部栏</string>
+    <string name="bottom_bar_enabled_summary">在按键下方预留一条开关栏，避免底部开关压住按键</string>
+    <string name="bottom_bar_height">底部栏高度</string>
+    <string name="bottom_bar_height_auto">自动</string>
     <string name="hide_key_symbol">隐藏按键符号</string>
     <string name="hide_key_hint">隐藏按键注解</string>
     <string name="navbar_bkg_none">无背景</string>

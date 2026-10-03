@@ -237,30 +237,48 @@ internal fun actionHandleAnchors(floating: Boolean): List<Pair<BottomToggle, Act
         )
     }
 
-/** Margins of one bottom handle, in pixels. */
+/** Horizontal margins of one bottom handle, in pixels. */
 internal data class HandleMargins(
     val start: Int,
     val end: Int,
-    val bottom: Int,
 )
 
 /**
- * Margins that keep a handle at the configured distance from the screen border.
+ * Margins that keep a handle at the configured distance from the *sides* of the keyboard
+ * surface.
  *
- * Modern phones have rounded corners, and the handle row is pinned to the very bottom of the
- * surface -- which on a docked keyboard is the bottom of the screen, inside the navigation bar
- * area. Without a margin the corner-most handles get clipped by the rounded corner and lose
- * part of their touch target.
+ * Only the horizontal axis is configurable. Vertically the row lives inside the bottom strip
+ * (`bottomPaddingSpace`), whose own bottom margin carries the navigation bar inset -- so a
+ * setting that moved the handles up would fight the strip instead of nudging them sideways,
+ * which is the only thing this preference is for.
  *
- * Only a handle pinned to a corner carries the horizontal margin. A chained handle follows a
- * neighbour that already carries it, so giving it one too would double the gap.
+ * Modern phones have rounded corners, and the corner-most handles would otherwise be clipped by
+ * them. Only a handle pinned to a corner carries the horizontal margin; a chained handle follows
+ * a neighbour that already carries it, so giving it one too would double the gap.
  */
 internal fun handleMargins(anchor: ActionHandleAnchor, margin: Int): HandleMargins =
     HandleMargins(
         start = if (anchor == ActionHandleAnchor.SURFACE_START) margin else 0,
         end = if (anchor == ActionHandleAnchor.SURFACE_END) margin else 0,
-        bottom = margin,
     )
+
+/** Edge length of the bottom handle icons, which the bottom bar has to be able to fit. */
+internal const val ACTION_HANDLE_SIZE_DP = 36
+
+/**
+ * Height of the bottom bar, in dp.
+ *
+ * [configuredDp] is the preference, where 0 means "auto" and defers to [themePaddingDp], the
+ * theme's `keyboard_padding_bottom`. Either way the result never drops below [minHeightDp]: the
+ * room the handle row occupies is the whole point of the bar, and a strip shorter than the
+ * toggles is exactly what lets them overlap the keys. Themes commonly reserve less than that
+ * (the IME's own default is 36dp), so they get the toggle height instead of their own.
+ */
+internal fun bottomBarHeightDp(
+    configuredDp: Int,
+    themePaddingDp: Int,
+    minHeightDp: Int,
+): Int = maxOf(if (configuredDp <= 0) themePaddingDp else configuredDp, minHeightDp)
 
 /** Lets a floating keyboard move with two fingers even when keys fill its surface. */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
@@ -609,11 +627,26 @@ class InputView(
         }
     }
 
+    /**
+     * Height of the bottom strip: the one the theme reserves (its `keyboard_padding_bottom`, per
+     * orientation) when the bottom bar is off, and the configured / fitted one when it is on.
+     */
     private val keyboardBottomPaddingPx: Int
         get() {
-            val value =
+            val themePadding =
                 if (context.isLandscapeMode()) keyboardBottomPaddingLandscape else keyboardBottomPadding
-            return dp(value)
+            if (!keyboardPrefs.bottomBarEnabled.getValue()) return dp(themePadding)
+            // Room for the handle row itself: the strip holds the toggles, so it can never be
+            // shorter than they are. (Their horizontal margin is a side matter and must not
+            // enlarge the strip -- that is what made the old setting feel like it padded all
+            // four edges at once.)
+            return dp(
+                bottomBarHeightDp(
+                    configuredDp = keyboardPrefs.bottomBarHeight.getValue(),
+                    themePaddingDp = themePadding,
+                    minHeightDp = ACTION_HANDLE_SIZE_DP,
+                ),
+            )
         }
 
     /** Distance kept between the bottom handle row (grips and toggles) and the surface edges. */
@@ -1066,19 +1099,19 @@ class InputView(
             setGripColor(scope.colors.keyboardBackColor)
         }
         if (moveHandle.parent == null) {
-            surface.add(moveHandle, lParams(dp(36), dp(36)) { bottomOfParent() })
+            surface.add(moveHandle, lParams(dp(ACTION_HANDLE_SIZE_DP), dp(ACTION_HANDLE_SIZE_DP)) { bottomOfParent() })
         }
         if (inputBarToggleHandle.parent == null) {
-            surface.add(inputBarToggleHandle, lParams(dp(36), dp(36)) { bottomOfParent() })
+            surface.add(inputBarToggleHandle, lParams(dp(ACTION_HANDLE_SIZE_DP), dp(ACTION_HANDLE_SIZE_DP)) { bottomOfParent() })
         }
         if (floatingModeToggleHandle.parent == null) {
-            surface.add(floatingModeToggleHandle, lParams(dp(36), dp(36)) { bottomOfParent() })
+            surface.add(floatingModeToggleHandle, lParams(dp(ACTION_HANDLE_SIZE_DP), dp(ACTION_HANDLE_SIZE_DP)) { bottomOfParent() })
         }
         if (candidatesWindowToggleHandle.parent == null) {
-            surface.add(candidatesWindowToggleHandle, lParams(dp(36), dp(36)) { bottomOfParent() })
+            surface.add(candidatesWindowToggleHandle, lParams(dp(ACTION_HANDLE_SIZE_DP), dp(ACTION_HANDLE_SIZE_DP)) { bottomOfParent() })
         }
         if (resizeHandle.parent == null) {
-            surface.add(resizeHandle, lParams(dp(36), dp(36)) { bottomOfParent() })
+            surface.add(resizeHandle, lParams(dp(ACTION_HANDLE_SIZE_DP), dp(ACTION_HANDLE_SIZE_DP)) { bottomOfParent() })
         }
         // Both the anchors and the edge margin depend on state that can change at runtime (the
         // mode, and the margin preference), so the whole bottom row is placed here instead of
@@ -1090,9 +1123,9 @@ class InputView(
     /**
      * Places the bottom row: the two floating grips and the three toggles.
      *
-     * The toggles spread out differently per mode, and every handle keeps
-     * [bottomHandleMarginPx] away from the surface edges, so a rounded screen corner cannot
-     * clip it or eat its taps.
+     * The toggles spread out differently per mode, every handle is pinned inside the bottom strip,
+     * and the corner-most ones keep the configured distance from the surface's sides, so a
+     * rounded screen corner cannot clip them or eat their taps.
      */
     private fun placeBottomHandles(floating: Boolean) {
         val margin = bottomHandleMarginPx
@@ -1113,13 +1146,16 @@ class InputView(
     }
 
     /**
-     * Pins the handle to the bottom edge, at the requested horizontal anchor.
+     * Pins the handle inside the bottom strip, at the requested horizontal anchor.
      *
-     * The margins go through the *relative* [marginStart] / [marginEnd] properties on purpose:
-     * the splitties helpers used here write absolute margins (and `endOfParent` writes
-     * `rightMargin` directly), which the start/end resolution that runs on every
-     * `setLayoutParams` would then overwrite with zero. Only a handle pinned to a corner keeps
-     * the edge margin -- a chained one follows a neighbour that already carries it.
+     * The vertical constraint targets [bottomPaddingSpace] rather than the surface edge: that
+     * strip is the row's container and is the one that knows how much room the bottom of the
+     * screen takes (its bottom margin carries the navigation bar inset). The margins themselves
+     * go through the *relative* [marginStart] / [marginEnd] properties on purpose: the splitties
+     * helpers used here write absolute margins (and `endOfParent` writes `rightMargin` directly),
+     * which the start/end resolution that runs on every `setLayoutParams` would then overwrite
+     * with zero. Only a handle pinned to a corner keeps the edge margin -- a chained one follows
+     * a neighbour that already carries it.
      */
     private fun ConstraintLayout.LayoutParams.anchorTo(anchor: ActionHandleAnchor, margin: Int) {
         // Clear first: an anchor left over from the previous placement must not survive.
@@ -1135,17 +1171,23 @@ class InputView(
             ActionHandleAnchor.AFTER_FLOATING_KEYBOARD_TOGGLE -> startToEndOf(floatingModeToggleHandle)
             ActionHandleAnchor.AFTER_TOOLBAR_TOGGLE -> startToEndOf(inputBarToggleHandle)
         }
-        bottomOfParent()
+        bottomToBottom = bottomPaddingSpace.id
+        bottomMargin = 0
         val margins = handleMargins(anchor, margin)
         marginStart = margins.start
         marginEnd = margins.end
-        bottomMargin = margins.bottom
     }
 
     private fun updateFloatingActionHandles() {
         val toolbarHidden = keyboardPrefs.hideInputBar.getValue()
+        // With the bottom bar on, the toggles sit on the scheme's keyboard background, so they
+        // take the scheme's key text colour -- the same contrast every key label relies on.
+        // Without it they float over whatever the theme paints there, where guessing from the
+        // keyboard background's luminance is the safer bet.
         val handleTint =
-            if (ColorUtils.calculateLuminance(scope.colors.keyboardBackColor) > 0.5) {
+            if (keyboardPrefs.bottomBarEnabled.getValue()) {
+                scope.colors.keyTextColor
+            } else if (ColorUtils.calculateLuminance(scope.colors.keyboardBackColor) > 0.5) {
                 Color.DKGRAY
             } else {
                 Color.WHITE
@@ -1195,9 +1237,20 @@ class InputView(
         updateFloatingActionHandles()
     }
 
-    /** Re-applies the bottom handle margin, which the settings screen changes at runtime. */
+    /** Re-applies the bottom toggle side margin, which the settings screen changes at runtime. */
     fun refreshBottomHandleMargin() {
         placeBottomHandles(isFloatingKeyboardEnabled)
+    }
+
+    /**
+     * Re-reads the bottom bar preferences at runtime: its height, whether it is reserved at all,
+     * and the toggle tint that follows from it. The keyboard changes height, so the IME window's
+     * insets have to be recomputed as well.
+     */
+    fun refreshBottomBar() {
+        applyBottomBar()
+        updateFloatingActionHandles()
+        service.requestInputInsetsUpdate()
     }
 
     /** Restyles colors after a scheme switch without rebuilding the view tree. */
@@ -1206,6 +1259,7 @@ class InputView(
         if (isFloatingKeyboardEnabled) {
             (keyboardView.background as? GradientDrawable)?.setColor(scope.colors.keyboardBackColor)
         }
+        applyBottomBar()
         resizeHandle.setGripColor(scope.colors.keyboardBackColor)
         moveHandle.setGripColor(scope.colors.keyboardBackColor)
         updateFloatingActionHandles()
@@ -1344,9 +1398,7 @@ class InputView(
     }
 
     private fun updateKeyboardSize() {
-        bottomPaddingSpace.updateLayoutParams {
-            height = keyboardBottomPaddingPx
-        }
+        applyBottomBar()
         val sidePadding = keyboardSidePaddingPx
         val unset = LayoutParams.UNSET
         if (sidePadding == 0) {
@@ -1377,6 +1429,27 @@ class InputView(
         }
         preedit.ui.root.setPadding(sidePadding, 0, sidePadding, 0)
         inputBar.view.setPadding(sidePadding, 0, sidePadding, 0)
+    }
+
+    /**
+     * Applies the bottom strip that the handle row sits in: its height ([keyboardBottomPaddingPx])
+     * and, while the bar is enabled, the scheme's keyboard background as its fill.
+     *
+     * The fill is what makes the strip read as part of the keyboard rather than as a gap the
+     * toggles happen to be parked in, and it keeps working when a theme paints the keyboard with a
+     * background *image* -- the strip then still follows the colour scheme.
+     */
+    private fun applyBottomBar() {
+        bottomPaddingSpace.updateLayoutParams { height = keyboardBottomPaddingPx }
+        bottomPaddingSpace.background =
+            if (keyboardPrefs.bottomBarEnabled.getValue()) {
+                GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    setColor(scope.colors.keyboardBackColor)
+                }
+            } else {
+                null
+            }
     }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {

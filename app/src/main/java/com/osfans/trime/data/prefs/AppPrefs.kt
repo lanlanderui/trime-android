@@ -132,6 +132,8 @@ class AppPrefs(
             const val USE_SOFT_CURSOR = "use_soft_cursor"
             const val HIDE_INPUT_BAR = "hide_input_bar"
             const val BOTTOM_TOGGLE_MARGIN = "bottom_toggle_margin"
+            const val BOTTOM_BAR_ENABLED = "bottom_bar_enabled"
+            const val BOTTOM_BAR_HEIGHT = "bottom_bar_height"
             const val HIDE_KEY_SYMBOL = "hide_key_symbol"
             const val HIDE_KEY_HINT = "hide_key_hint"
 
@@ -237,6 +239,33 @@ class AppPrefs(
         val useSoftCursor = switch(R.string.use_soft_cursor, USE_SOFT_CURSOR, true)
 
         val hideInputBar = switch(R.string.hide_input_bar, HIDE_INPUT_BAR, false)
+
+        /**
+         * Reserves a strip at the bottom of the keyboard for the IME toggles, painted with the
+         * scheme's keyboard background. Off means the toggles keep floating over whatever the
+         * theme's `keyboard_padding_bottom` leaves them, which overlaps the keys when a theme
+         * reserves less room than the toggles need.
+         */
+        val bottomBarEnabled = switch(
+            R.string.bottom_bar_enabled,
+            BOTTOM_BAR_ENABLED,
+            true,
+            R.string.bottom_bar_enabled_summary,
+        )
+
+        /** Height of that strip; 0 = auto, i.e. whatever the toggles and the theme need. */
+        val bottomBarHeight = int(
+            R.string.bottom_bar_height,
+            BOTTOM_BAR_HEIGHT,
+            0,
+            0,
+            96,
+            "dp",
+            2,
+            R.string.bottom_bar_height_auto,
+            useMinAsDefault = true,
+        ) { bottomBarEnabled.getValue() }
+
         val bottomToggleMargin = int(
             R.string.bottom_toggle_margin,
             BOTTOM_TOGGLE_MARGIN,
