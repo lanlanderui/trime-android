@@ -6,6 +6,8 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 # Trime —— 个人修改版（Personal Modified Build）
 
+![封面](readme_pic/封面图.webp)
+
 本仓库是作者个人修改的 Trime 版本，并非新项目：全部内容基于原项目 同文输入法 Trime 修改而来，
 与原项目**无隶属关系，也不是官方发布版**。原代码、文档与素材的著作权归 Rime community 所有，
 许可证为 GPL-3.0-or-later。遇到问题请在本仓库反馈，**不要**提到原项目去。
