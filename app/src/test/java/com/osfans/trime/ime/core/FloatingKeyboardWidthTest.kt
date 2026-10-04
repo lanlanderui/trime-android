@@ -94,4 +94,82 @@ class FloatingKeyboardWidthTest :
                     MIN_FLOATING_KEYBOARD_WIDTH_PERCENT) shouldBe true
             }
         }
+
+        // Where the card may sit horizontally. The margin is dp(8) = 26px on this device, and the
+        // failure this pins is the default width: a card as wide as the screen has no position
+        // that keeps both margins, and clamping it to the left one pushed its right edge off the
+        // screen (the stored offset was exactly 26px, the margin itself).
+        Given("a card that fits inside the margins") {
+            val margin = 26f
+            val visualWidth = physicalWidth(60, portraitWindow).toFloat()
+            val cardLeft = (portraitWindow - visualWidth).toInt() / 2
+
+            Then("a request inside the range is honoured") {
+                floatingTranslationX(
+                    requestedX = 40f,
+                    cardLeft = cardLeft,
+                    visualWidth = visualWidth,
+                    windowWidth = portraitWindow,
+                    margin = margin,
+                ) shouldBe 40f
+            }
+
+            Then("a drag past either edge stops at the margin") {
+                floatingTranslationX(
+                    requestedX = -9999f,
+                    cardLeft = cardLeft,
+                    visualWidth = visualWidth,
+                    windowWidth = portraitWindow,
+                    margin = margin,
+                ) shouldBe margin - cardLeft
+                floatingTranslationX(
+                    requestedX = 9999f,
+                    cardLeft = cardLeft,
+                    visualWidth = visualWidth,
+                    windowWidth = portraitWindow,
+                    margin = margin,
+                ) shouldBe (portraitWindow - margin - cardLeft - visualWidth)
+            }
+        }
+
+        Given("a card as wide as the screen, which is the default width") {
+            val margin = 26f
+            val visualWidth = portraitWindow.toFloat()
+
+            Then("it sits flush with the left edge instead of hanging off the right one") {
+                floatingTranslationX(
+                    requestedX = 0f,
+                    cardLeft = 0,
+                    visualWidth = visualWidth,
+                    windowWidth = portraitWindow,
+                    margin = margin,
+                ) shouldBe 0f
+            }
+
+            Then("a stored or dragged offset cannot push it off the screen either") {
+                // 26px is what the old clamp produced for itself, and it was persisted that way.
+                floatingTranslationX(
+                    requestedX = margin,
+                    cardLeft = 0,
+                    visualWidth = visualWidth,
+                    windowWidth = portraitWindow,
+                    margin = margin,
+                ) shouldBe 0f
+            }
+        }
+
+        Given("a card that is wider than the window allows for margins but still fits on screen") {
+            Then("it is still placed flush, so the right edge stays on screen") {
+                val visualWidth = (portraitWindow - 20).toFloat()
+                val resolved = floatingTranslationX(
+                    requestedX = 0f,
+                    cardLeft = 10,
+                    visualWidth = visualWidth,
+                    windowWidth = portraitWindow,
+                    margin = 26f,
+                )
+                resolved shouldBe 0f
+                (resolved + 10 + visualWidth <= portraitWindow) shouldBe true
+            }
+        }
     })

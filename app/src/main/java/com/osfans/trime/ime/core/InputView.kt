@@ -160,6 +160,30 @@ internal fun floatingScaleX(widthPercent: Int, baseWidthPercent: Int): Float {
 }
 
 /**
+ * Horizontal translation that keeps the floating keyboard within the window.
+ *
+ * The obvious `coerceIn(margin - left, window - margin - left - width)` collapses once the
+ * keyboard is as wide as the window: the upper bound goes negative while the lower one stays
+ * positive, and guarding it with `coerceAtLeast` pins the card to the left *margin* -- shoving it
+ * 8dp to the right with its right edge hanging off the screen. That is not a corner case either:
+ * 100% is the default width, and a card that cannot sit inside both margins has no such position,
+ * so it is placed flush with the left edge instead. That is the only side the user can still
+ * reach, and the right edge is where a full-width card has nothing left to give.
+ */
+internal fun floatingTranslationX(
+    requestedX: Float,
+    cardLeft: Int,
+    visualWidth: Float,
+    windowWidth: Int,
+    margin: Float,
+): Float {
+    if (visualWidth >= windowWidth - 2 * margin) return 0f
+    val min = margin - cardLeft
+    val max = (windowWidth - margin - cardLeft - visualWidth).coerceAtLeast(min)
+    return requestedX.coerceIn(min, max)
+}
+
+/**
  * Vertical scale for the floating keyboard.
  *
  * The toolbar keeps its themed height while the key area absorbs the whole delta. The delta is
@@ -865,15 +889,20 @@ class InputView(
 
         val horizontalMargin = dp(8).toFloat()
         val visualWidth = keyboardView.width * keyboardView.scaleX
-        val minTranslationX = horizontalMargin - keyboardView.left
-        val maxTranslationX = width - horizontalMargin - keyboardView.left - visualWidth
+        val resolvedX =
+            floatingTranslationX(
+                requestedX = requestedX,
+                cardLeft = keyboardView.left,
+                visualWidth = visualWidth,
+                windowWidth = width,
+                margin = horizontalMargin,
+            )
         val floatingTop =
             preedit.ui.root
                 .takeIf { it.visibility == View.VISIBLE && it.height > 0 }
                 ?.let { it.top + dp(floatingPreeditOffsetY + 1) }
                 ?: keyboardView.top
         val minTranslationY = -(floatingTop - dp(16)).coerceAtLeast(0).toFloat()
-        val resolvedX = requestedX.coerceIn(minTranslationX, maxTranslationX.coerceAtLeast(minTranslationX))
         val maxTranslationY =
             (height - dp(8) - keyboardView.top - keyboardView.height * keyboardView.scaleY)
                 .coerceAtLeast(minTranslationY)
