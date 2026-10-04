@@ -241,14 +241,28 @@ object ClipboardHelper :
     }
 
     private suspend fun removeOutdated() {
-        val limit = limitPref.getValue()
-        val unpinned = clbDao.getAllUnpinned()
-        if (unpinned.size > limit) {
-            val outdated =
-                unpinned
-                    .sortedBy { it.id }
-                    .getOrNull(unpinned.size - limit)
-            clbDao.deletedUnpinnedEarlierThan(outdated?.time ?: System.currentTimeMillis())
+        val outdated = clbDao.getAllUnpinned().outdated(limitPref.getValue())
+        if (outdated.isNotEmpty()) {
+            clbDao.delete(outdated)
         }
     }
 }
+
+/**
+ * The unpinned rows that do not fit under [limit], oldest by time first.
+ *
+ * The panel orders the history by time, so the limit has to give way the same way: the row copied
+ * longest ago is the one to drop. It used to be picked by id while the delete ran on time, and the
+ * two orders stop agreeing as soon as an old entry is copied again -- its time moves up while its
+ * id stays behind, so the wrong row could be cut and a newer one kept.
+ *
+ * The rows themselves come back rather than a cutoff time, so that entries sharing a timestamp are
+ * not taken as a group: two rows copied in the same millisecond fill two slots, and dropping both
+ * would quietly shrink the history below the limit the user set.
+ */
+internal fun List<DatabaseBean>.outdated(limit: Int): List<DatabaseBean> =
+    if (size <= limit) {
+        emptyList()
+    } else {
+        sortedBy { it.time }.take(size - limit)
+    }
