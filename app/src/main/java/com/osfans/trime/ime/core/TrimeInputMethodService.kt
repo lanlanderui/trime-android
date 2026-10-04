@@ -115,6 +115,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         // listed is a preference whose change is never seen until the view is built again.
         prefs.keyboard.bottomBarEnabled,
         prefs.keyboard.bottomBarHeight,
+        prefs.keyboard.bottomBarHeightLandscape,
         prefs.advanced.ignoreSystemGestureInsets,
     )
 
@@ -146,7 +147,8 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
                 // The bottom bar only changes the strip's height and colour, so the view tree
                 // stays as it is; only the IME window's insets have to be recomputed.
                 AppPrefs.Keyboard.BOTTOM_BAR_ENABLED,
-                AppPrefs.Keyboard.BOTTOM_BAR_HEIGHT -> inputView?.refreshBottomBar()
+                AppPrefs.Keyboard.BOTTOM_BAR_HEIGHT,
+                AppPrefs.Keyboard.BOTTOM_BAR_HEIGHT_LANDSCAPE -> inputView?.refreshBottomBar()
 
                 else -> themeScope?.let { replaceInputView(it) }
             }

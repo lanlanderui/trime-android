@@ -228,6 +228,7 @@
     <string name="bottom_bar_enabled">Reserve bottom bar</string>
     <string name="bottom_bar_enabled_summary">Keeps a strip below the keys for the IME toggles, so they cannot overlap the keys</string>
     <string name="bottom_bar_height">Bottom bar height</string>
+    <string name="bottom_bar_height_landscape">Bottom bar height (landscape)</string>
     <string name="bottom_bar_height_auto">Auto</string>
     <string name="hide_key_symbol">Hide key symbol</string>
     <string name="hide_key_hint">Hide key hint</string>

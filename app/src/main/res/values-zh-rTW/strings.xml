@@ -227,6 +227,7 @@
     <string name="bottom_bar_enabled">獨立底部列</string>
     <string name="bottom_bar_enabled_summary">在按鍵下方預留一條開關列，避免底部開關壓住按鍵</string>
     <string name="bottom_bar_height">底部列高度</string>
+    <string name="bottom_bar_height_landscape">底部列高度（橫向）</string>
     <string name="bottom_bar_height_auto">自動</string>
     <string name="hide_key_symbol">隱藏按鍵符號</string>
     <string name="hide_key_hint">隱藏按鍵註解</string>

@@ -657,17 +657,26 @@ class InputView(
      */
     private val keyboardBottomPaddingPx: Int
         get() {
+            val landscape = context.isLandscapeMode()
             val themePadding =
-                if (context.isLandscapeMode()) keyboardBottomPaddingLandscape else keyboardBottomPadding
+                if (landscape) keyboardBottomPaddingLandscape else keyboardBottomPadding
             if (!keyboardPrefs.bottomBarEnabled.getValue()) return dp(themePadding)
-            // Room for the handle row itself: the strip holds the toggles, so it can never be
-            // shorter than they are. (Their horizontal margin is a side matter and must not
-            // enlarge the strip -- that is what made the old setting feel like it padded all
-            // four edges at once.)
+            // Landscape has its own height: the strip comes out of the screen's short dimension
+            // there, so the portrait value would eat into a keyboard that is already short.
+            val configured =
+                if (landscape) {
+                    keyboardPrefs.bottomBarHeightLandscape.getValue()
+                } else {
+                    keyboardPrefs.bottomBarHeight.getValue()
+                }
             return dp(
                 bottomBarHeightDp(
-                    configuredDp = keyboardPrefs.bottomBarHeight.getValue(),
+                    configuredDp = configured,
                     themePaddingDp = themePadding,
+                    // Room for the handle row itself: the strip holds the toggles, so it can
+                    // never be shorter than they are. (Their horizontal margin is a side matter
+                    // and must not enlarge the strip -- that is what made the old setting feel
+                    // like it padded all four edges at once.)
                     minHeightDp = ACTION_HANDLE_SIZE_DP,
                 ),
             )
@@ -1200,7 +1209,17 @@ class InputView(
             ActionHandleAnchor.AFTER_FLOATING_KEYBOARD_TOGGLE -> startToEndOf(floatingModeToggleHandle)
             ActionHandleAnchor.AFTER_TOOLBAR_TOGGLE -> startToEndOf(inputBarToggleHandle)
         }
+        // Vertical placement inside the strip. With the bottom bar on, the row is centred in it:
+        // the strip's height is the user's setting, and a row glued to its bottom edge looks
+        // stranded in a tall one. The strip is never shorter than a handle while the bar is on
+        // (that is what the height floor guarantees), so centring cannot push one off the edge.
+        topToTop = ConstraintLayout.LayoutParams.UNSET
+        topToBottom = ConstraintLayout.LayoutParams.UNSET
+        bottomToTop = ConstraintLayout.LayoutParams.UNSET
         bottomToBottom = bottomPaddingSpace.id
+        if (keyboardPrefs.bottomBarEnabled.getValue()) {
+            topToTop = bottomPaddingSpace.id
+        }
         bottomMargin = 0
         val margins = handleMargins(anchor, margin)
         marginStart = margins.start

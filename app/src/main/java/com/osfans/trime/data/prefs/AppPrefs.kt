@@ -134,6 +134,7 @@ class AppPrefs(
             const val BOTTOM_TOGGLE_MARGIN = "bottom_toggle_margin"
             const val BOTTOM_BAR_ENABLED = "bottom_bar_enabled"
             const val BOTTOM_BAR_HEIGHT = "bottom_bar_height"
+            const val BOTTOM_BAR_HEIGHT_LANDSCAPE = "bottom_bar_height_landscape"
             const val HIDE_KEY_SYMBOL = "hide_key_symbol"
             const val HIDE_KEY_HINT = "hide_key_hint"
 
@@ -257,6 +258,23 @@ class AppPrefs(
         val bottomBarHeight = int(
             R.string.bottom_bar_height,
             BOTTOM_BAR_HEIGHT,
+            0,
+            0,
+            96,
+            "dp",
+            2,
+            R.string.bottom_bar_height_auto,
+            useMinAsDefault = true,
+        ) { bottomBarEnabled.getValue() }
+
+        /**
+         * The same strip in landscape, which gets a value of its own: there the keyboard grows
+         * out of the screen's short dimension, so a strip sized for portrait would take a real
+         * bite out of it.
+         */
+        val bottomBarHeightLandscape = int(
+            R.string.bottom_bar_height_landscape,
+            BOTTOM_BAR_HEIGHT_LANDSCAPE,
             0,
             0,
             96,
