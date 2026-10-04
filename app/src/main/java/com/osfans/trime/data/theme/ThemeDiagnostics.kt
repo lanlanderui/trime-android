@@ -12,6 +12,7 @@ import com.osfans.trime.data.theme.model.GeneralStyle
 import com.osfans.trime.util.ColorUtils
 import com.osfans.trime.util.mapping
 import com.osfans.trime.util.pairs
+import com.osfans.trime.util.sequence
 import com.osfans.trime.util.string
 import timber.log.Timber
 
@@ -45,6 +46,9 @@ object ThemeDiagnostics {
         UNRESOLVABLE_PRESET_SEND,
         MISSING_KEYBOARD_REFERENCE,
         CYCLIC_KEYBOARD_REFERENCE,
+        FONT_NOT_A_LIST,
+        IGNORED_TOOL_BAR_KEY,
+        IGNORED_LIQUID_KEYBOARD_KEY,
     }
 
     enum class Severity {
@@ -85,6 +89,61 @@ object ThemeDiagnostics {
         lintColorSchemes(theme, parseColor)
         lintPresetSends(theme)
         lintKeyboardReferences(theme)
+        lintUnreadSettings(node)
+    }
+
+    /**
+     * Reports settings that look right but do nothing: a value whose shape the decoder cannot
+     * read, and keys this build has no reader for.
+     *
+     * The key-name checks above cannot see these. A theme that writes `key_font: key.ttf` has
+     * spelled the key correctly, so nothing is unknown -- but the decoder reads a *list* of
+     * files there and gets an empty one, and the setting is silently gone. The same holds for a
+     * button declared by name under `tool_bar`, which only the list form reaches.
+     */
+    private fun MutableList<Finding>.lintUnreadSettings(node: YamlMap) {
+        val style = node.pairs["style"]?.mapping
+        FONT_KEYS.forEach { key ->
+            val value = style?.pairs?.get(key) ?: return@forEach
+            if (value.sequence == null) {
+                add(
+                    Finding(
+                        Severity.WARNING,
+                        Code.FONT_NOT_A_LIST,
+                        "'$key' is written as one value; a font is read as a list of files, " +
+                            "so this setting is ignored",
+                        "style/$key",
+                    ),
+                )
+            }
+        }
+        reportUnreadKeys(node.pairs["tool_bar"]?.mapping, IGNORED_TOOL_BAR_KEYS, "tool_bar", Code.IGNORED_TOOL_BAR_KEY)
+        reportUnreadKeys(
+            node.pairs["liquid_keyboard"]?.mapping,
+            IGNORED_LIQUID_KEYBOARD_KEYS,
+            "liquid_keyboard",
+            Code.IGNORED_LIQUID_KEYBOARD_KEY,
+        )
+    }
+
+    private fun MutableList<Finding>.reportUnreadKeys(
+        node: YamlMap?,
+        keys: List<String>,
+        path: String,
+        code: Code,
+    ) {
+        if (node == null) return
+        keys.forEach { key ->
+            if (key !in node.pairs) return@forEach
+            add(
+                Finding(
+                    Severity.WARNING,
+                    code,
+                    "'$path/$key' has no reader in this build; the runtime ignores it",
+                    "$path/$key",
+                ),
+            )
+        }
     }
 
     /**
@@ -413,3 +472,44 @@ object ThemeDiagnostics {
 
     private fun parseColor(value: String): Int? = runCatching { ColorUtils.parseColor(value) }.getOrNull()
 }
+
+/**
+ * Font settings the decoder reads as a list of files. A theme that writes one of them as a bare
+ * value has a key name the checks above accept, and a setting that is silently not applied.
+ */
+private val FONT_KEYS =
+    listOf(
+        "candidate_font",
+        "comment_font",
+        "hanb_font",
+        "key_font",
+        "label_font",
+        "latin_font",
+        "popup_font",
+        "symbol_font",
+        "text_font",
+    )
+
+/**
+ * Buttons a theme may declare by name under `tool_bar`. Only the list form is read
+ * (`buttons`, plus `primary_button`), so these do nothing where they stand.
+ */
+private val IGNORED_TOOL_BAR_KEYS =
+    listOf(
+        "ascii_mode_button",
+        "clipboard_button",
+        "edit_button",
+        "emoji_button",
+        "full_shape_button",
+        "hide_button",
+    )
+
+/** Liquid keyboard settings this build has no reader for. */
+private val IGNORED_LIQUID_KEYBOARD_KEYS =
+    listOf(
+        "author",
+        "row",
+        "row_land",
+        "key_height_land",
+        "vertical_gap",
+    )

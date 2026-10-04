@@ -12,7 +12,9 @@ import com.osfans.trime.ime.keyboard.KeyCode
 import com.osfans.trime.util.Yaml
 import com.osfans.trime.util.mapping
 import io.kotest.core.spec.style.BehaviorSpec
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import timber.log.Timber
@@ -426,12 +428,51 @@ class ThemeDiagnosticsTest :
                     "WARNING UNKNOWN_STYLE_KEY style/preview_height",
                     "WARNING UNKNOWN_STYLE_KEY style/preview_offset",
                     "WARNING UNKNOWN_STYLE_KEY style/preview_text_size",
+                    // The shipped theme writes its fonts as bare file names; the decoder reads a
+                    // list, so the default font never applies. The liquid keyboard block carries
+                    // five settings nothing reads.
+                    "WARNING FONT_NOT_A_LIST style/candidate_font",
+                    "WARNING FONT_NOT_A_LIST style/comment_font",
+                    "WARNING FONT_NOT_A_LIST style/hanb_font",
+                    "WARNING FONT_NOT_A_LIST style/key_font",
+                    "WARNING FONT_NOT_A_LIST style/label_font",
+                    "WARNING FONT_NOT_A_LIST style/latin_font",
+                    "WARNING FONT_NOT_A_LIST style/symbol_font",
+                    "WARNING FONT_NOT_A_LIST style/text_font",
+                    "WARNING IGNORED_LIQUID_KEYBOARD_KEY liquid_keyboard/author",
+                    "WARNING IGNORED_LIQUID_KEYBOARD_KEY liquid_keyboard/row",
+                    "WARNING IGNORED_LIQUID_KEYBOARD_KEY liquid_keyboard/row_land",
+                    "WARNING IGNORED_LIQUID_KEYBOARD_KEY liquid_keyboard/key_height_land",
+                    "WARNING IGNORED_LIQUID_KEYBOARD_KEY liquid_keyboard/vertical_gap",
                 )
             val tongwenfengFindings =
                 listOf(
                     "INFO UNKNOWN_TOP_LEVEL_KEY /height",
                     "INFO UNKNOWN_TOP_LEVEL_KEY /round_corner",
                     "INFO UNKNOWN_TOP_LEVEL_KEY /colors",
+                    // Same three families as the default theme: bare font names, toolbar buttons
+                    // declared by a name only the list form reaches, and liquid keyboard settings
+                    // with no reader.
+                    "WARNING FONT_NOT_A_LIST style/candidate_font",
+                    "WARNING FONT_NOT_A_LIST style/comment_font",
+                    "WARNING FONT_NOT_A_LIST style/hanb_font",
+                    "WARNING FONT_NOT_A_LIST style/key_font",
+                    "WARNING FONT_NOT_A_LIST style/label_font",
+                    "WARNING FONT_NOT_A_LIST style/latin_font",
+                    "WARNING FONT_NOT_A_LIST style/popup_font",
+                    "WARNING FONT_NOT_A_LIST style/symbol_font",
+                    "WARNING FONT_NOT_A_LIST style/text_font",
+                    "WARNING IGNORED_TOOL_BAR_KEY tool_bar/ascii_mode_button",
+                    "WARNING IGNORED_TOOL_BAR_KEY tool_bar/clipboard_button",
+                    "WARNING IGNORED_TOOL_BAR_KEY tool_bar/edit_button",
+                    "WARNING IGNORED_TOOL_BAR_KEY tool_bar/emoji_button",
+                    "WARNING IGNORED_TOOL_BAR_KEY tool_bar/full_shape_button",
+                    "WARNING IGNORED_TOOL_BAR_KEY tool_bar/hide_button",
+                    "WARNING IGNORED_LIQUID_KEYBOARD_KEY liquid_keyboard/author",
+                    "WARNING IGNORED_LIQUID_KEYBOARD_KEY liquid_keyboard/row",
+                    "WARNING IGNORED_LIQUID_KEYBOARD_KEY liquid_keyboard/row_land",
+                    "WARNING IGNORED_LIQUID_KEYBOARD_KEY liquid_keyboard/key_height_land",
+                    "WARNING IGNORED_LIQUID_KEYBOARD_KEY liquid_keyboard/vertical_gap",
                 )
 
             fun lintBuiltin(file: String): List<ThemeDiagnostics.Finding> {
@@ -481,6 +522,73 @@ class ThemeDiagnosticsTest :
                         .map { it.groupValues[1] }
                         .toSet()
                 Theme.TOP_LEVEL_KEYS shouldBe literals + setOf("config_version", "author", "description", "version")
+            }
+        }
+
+        // Settings that look right and do nothing: the key name is one the checks above accept,
+        // so only the value's shape (or the absence of any reader) gives them away. All three
+        // were found on a real theme while auditing it, which is why they are here at all.
+        // The fixtures carry the minimum `Theme.decode` insists on: a name and a style block.
+        Given("a font written as a bare value") {
+            Then("it is reported, because a font is decoded from a list of files") {
+                lint(
+                    """
+                    config_version: "3.0"
+                    name: t
+                    style:
+                      key_font: key.ttf
+                      text_font: [text.ttf]
+                    preset_color_schemes: {default: {back_color: "#000000"}}
+                    """.trimIndent(),
+                ).map { it.code } shouldContain Code.FONT_NOT_A_LIST
+            }
+        }
+
+        Given("buttons a theme declares by name under tool_bar") {
+            Then("they are reported, because only the list form is read") {
+                lint(
+                    """
+                    config_version: "3.0"
+                    name: t
+                    style: {}
+                    preset_color_schemes: {default: {back_color: "#000000"}}
+                    tool_bar:
+                      hide_button: { enabled: true }
+                      buttons: [ { key: 1, label: A } ]
+                    """.trimIndent(),
+                ).map { it.code } shouldContain Code.IGNORED_TOOL_BAR_KEY
+            }
+        }
+
+        Given("liquid keyboard settings this build has no reader for") {
+            Then("they are reported, path and all") {
+                val findings =
+                    lint(
+                        """
+                        config_version: "3.0"
+                        name: t
+                        style: {}
+                        preset_color_schemes: {default: {back_color: "#000000"}}
+                        liquid_keyboard:
+                          author: someone
+                          key_height: 40
+                        """.trimIndent(),
+                    )
+                findings.first { it.code == Code.IGNORED_LIQUID_KEYBOARD_KEY }.path shouldBe
+                    "liquid_keyboard/author"
+            }
+
+            Then("a liquid keyboard without them is left alone") {
+                lint(
+                    """
+                    config_version: "3.0"
+                    name: t
+                    style: {}
+                    preset_color_schemes: {default: {back_color: "#000000"}}
+                    liquid_keyboard:
+                      key_height: 40
+                    """.trimIndent(),
+                ).map { it.code } shouldNotContain Code.IGNORED_LIQUID_KEYBOARD_KEY
             }
         }
     })
