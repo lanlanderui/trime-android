@@ -20,6 +20,17 @@ data class DatabaseBean(
     val type: BeanType = BeanType.TEXT,
     val time: Long = System.currentTimeMillis(),
     val pinned: Boolean = false,
+    /**
+     * Path of a copied image; unused now and kept only so the schema matches the databases that
+     * were migrated to version 5.
+     *
+     * Image support was built and then taken back out (it was not used often enough), but Room
+     * refuses to open a database whose version is newer than the entity's, and dropping the
+     * column would also change the schema Room validates on every open. A leftover row of an
+     * earlier build keeps working: it reads back as [BeanType.IMAGE] and the panel shows it as an
+     * empty entry the user can delete.
+     */
+    val imagePath: String? = null,
 ) {
     companion object {
         const val TABLE_NAME = "t_data"
@@ -35,9 +46,18 @@ data class DatabaseBean(
         }
     }
 
+    /**
+     * [IMAGE] is what an earlier build stored a copied image as. It stays in the enum for the same
+     * reason [imagePath] stays in the entity: the ordinal is what the database holds, and a row
+     * written by that build would fail to read (`entries[ordinal]`) without it.
+     *
+     * New types are appended for the same reason -- the ordinals are the stored values, so putting
+     * one anywhere else would rename every row that is already there.
+     */
     enum class BeanType {
         TEXT,
         HTML,
+        IMAGE,
     }
 
     class Converters {

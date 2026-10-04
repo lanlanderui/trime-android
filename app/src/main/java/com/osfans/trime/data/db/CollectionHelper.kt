@@ -6,7 +6,6 @@
 package com.osfans.trime.data.db
 
 import android.content.Context
-import androidx.room.Room
 import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,11 +24,7 @@ object CollectionHelper : CoroutineScope by CoroutineScope(SupervisorJob() + Dis
     private var lastBean: DatabaseBean? = null
 
     fun init(context: Context) {
-        cltDb =
-            Room
-                .databaseBuilder(context, Database::class.java, "collection.db")
-                .addMigrations(Database.MIGRATION_3_4)
-                .build()
+        cltDb = Database.open(context, "collection.db")
         cltDao = cltDb.databaseDao()
     }
 

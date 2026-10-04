@@ -9,7 +9,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import androidx.annotation.Keep
-import androidx.room.Room
 import androidx.room.withTransaction
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.prefs.PreferenceDelegate
@@ -132,11 +131,7 @@ object ClipboardHelper :
 
     fun init(context: Context) {
         clipboardManager.addPrimaryClipChangedListener(this)
-        clbDb =
-            Room
-                .databaseBuilder(context, Database::class.java, "clipboard.db")
-                .addMigrations(Database.MIGRATION_3_4)
-                .build()
+        clbDb = Database.open(context, "clipboard.db")
         clbDao = clbDb.databaseDao()
         enabledListener.onChange(enabledPref.key, enabledPref.getValue())
         enabledPref.registerOnChangeListener(enabledListener)
