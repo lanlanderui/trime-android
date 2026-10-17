@@ -66,3 +66,21 @@ sealed interface DataDiff {
         }
     }
 }
+
+/**
+ * The bundled files that are not on disk, whatever the index says.
+ *
+ * [DataDiff.diff] answers "did the bundle change since the copy last ran", which is not the same
+ * question as "is the copy still there": when the two indexes agree it returns nothing at all, so
+ * a shared directory emptied from the outside — by a storage cleaner, by the user clearing app
+ * data, by anything that touches `Android/data/<pkg>/files` — matches the index and is never
+ * repaired. The symptom is quiet and confusing rather than loud: the bundled themes disappear from
+ * the theme picker, because the picker lists `*trime.yaml` out of the shared directory.
+ *
+ * [exists] takes the entry's path as the index spells it (`shared/trime.yaml`) and is injected so
+ * this stays a pure decision.
+ */
+internal fun missingDataFiles(
+    files: Map<String, String>,
+    exists: (String) -> Boolean,
+): List<String> = files.filter { (path, sha256) -> sha256.isNotBlank() && !exists(path) }.keys.toList()

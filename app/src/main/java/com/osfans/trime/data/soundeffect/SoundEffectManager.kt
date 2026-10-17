@@ -45,7 +45,7 @@ object SoundEffectManager {
 
     private val userEffects: MutableList<SoundEffect> get() = listSounds()
 
-    private var soundEffectPref by AppPrefs.defaultInstance().keyboard.customSoundEffect
+    private var soundEffectPref by AppPrefs.defaultInstance().feedback.customSoundEffect
 
     fun switchEffect(name: String) {
         val effect = getEffect(name)

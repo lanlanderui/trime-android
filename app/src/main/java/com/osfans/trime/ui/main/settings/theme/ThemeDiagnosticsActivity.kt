@@ -18,8 +18,11 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import com.osfans.trime.R
+import com.osfans.trime.data.theme.BuiltinLayoutStore
+import com.osfans.trime.data.theme.BuiltinStyleStore
 import com.osfans.trime.data.theme.ThemeDiagnostics
 import com.osfans.trime.data.theme.ThemeManager
+import com.osfans.trime.data.theme.ThemePrefs
 import com.osfans.trime.databinding.ActivityThemeDiagnosticsBinding
 import com.osfans.trime.util.DeviceInfo
 import com.osfans.trime.util.isNightMode
@@ -57,8 +60,23 @@ class ThemeDiagnosticsActivity : AppCompatActivity() {
         setContentView(binding.root)
         val theme = ThemeManager.activeTheme
         val findings = ThemeManager.activeFindings
+        // What the keyboard is doing right now, next to what the file says: while the built-in
+        // settings are in charge of a domain, the theme's own values for the knobs it overrides
+        // never reach the keyboard — and "why did my edit do nothing" is answered by listing
+        // exactly those.
+        val liveFindings =
+            ThemeDiagnostics.builtinOverridesInEffect(
+                styleOverrides = BuiltinStyleStore.current().values,
+                styleInCharge =
+                    ThemeManager.prefs.styleSource.getValue() == ThemePrefs.StyleSource.BUILTIN,
+                layoutOverrides = BuiltinLayoutStore.current().values,
+                layoutInCharge =
+                    ThemeManager.prefs.layoutSource.getValue() == ThemePrefs.LayoutSource.BUILTIN,
+                themeStyle = ThemeManager.baseGeneralStyle,
+            )
+        val shown = liveFindings + findings.orEmpty()
         val themeId = ThemeManager.prefs.selectedTheme.getValue()
-        val report = DeviceInfo.get(this) + ThemeDiagnostics.format(themeId, theme.name, findings)
+        val report = DeviceInfo.get(this) + ThemeDiagnostics.format(themeId, theme.name, findings, liveFindings)
 
         with(binding) {
             setSupportActionBar(diagnosticsToolbar.toolbar)
@@ -68,8 +86,8 @@ class ThemeDiagnosticsActivity : AppCompatActivity() {
                 subtitle = theme.name
             }
             findingsList.layoutManager = verticalLayoutManager()
-            findingsList.adapter = ThemeDiagnosticListAdapter(findings.orEmpty())
-            emptyState.isVisible = findings.isNullOrEmpty()
+            findingsList.adapter = ThemeDiagnosticListAdapter(shown)
+            emptyState.isVisible = shown.isEmpty()
             emptyState.setText(
                 if (findings == null) {
                     R.string.theme_diagnostics_unchecked

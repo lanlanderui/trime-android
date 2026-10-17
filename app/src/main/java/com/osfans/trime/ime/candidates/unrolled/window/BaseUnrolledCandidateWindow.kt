@@ -27,6 +27,7 @@ import com.osfans.trime.ime.candidates.unrolled.CandidatesPagingSource
 import com.osfans.trime.ime.candidates.unrolled.PagingCandidateViewAdapter
 import com.osfans.trime.ime.candidates.unrolled.UnrolledCandidateLayout
 import com.osfans.trime.ime.core.InputView
+import com.osfans.trime.ime.keyboard.InputFeedbackManager
 import com.osfans.trime.ime.core.TrimeInputMethodService
 import com.osfans.trime.ime.keyboard.KeyboardWindow
 import com.osfans.trime.ime.window.BoardWindow
@@ -139,6 +140,10 @@ abstract class BaseUnrolledCandidateWindow(di: DI) :
     fun bindCandidateUiViewHolder(holder: CandidateViewHolder) {
         holder.itemView.run {
             setOnClickListener { _ ->
+                // Picking a candidate is the same action as pressing a key, and the two other places
+                // a candidate can be picked (the row and the window) both answer with the keyboard's
+                // own tap feedback. This is the third, and it was the one still silent.
+                InputFeedbackManager.keyPressVibrate(this)
                 rime.launchOnReady { it.selectCandidate(holder.idx, global = true) }
             }
             setOnLongClickListener { view ->

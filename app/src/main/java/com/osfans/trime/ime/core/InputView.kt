@@ -99,6 +99,30 @@ internal fun resizedPercent(startPercent: Int, startPixels: Int, deltaPixels: Fl
     (startPercent * (startPixels + deltaPixels) / startPixels).roundToInt().coerceIn(min, max)
 
 /**
+ * The preedit's clearance above the keyboard, in pixels.
+ *
+ * The preference is a dp value, so the pixel distance follows the display density: the gap keeps
+ * its physical size on a phone, on a tablet, and after a rotation. Values outside the slider's
+ * range -- a prefs file written by a build with a wider range, a hand edit -- are clamped rather
+ * than trusted: this number ends up as a layout margin between two views, so a negative one
+ * would pull the preedit into the keys and a runaway one would push it off the window.
+ */
+internal fun preeditGapPx(gapDp: Int, density: Float): Int =
+    (gapDp.coerceIn(0, AppPrefs.Keyboard.PREEDIT_KEYBOARD_GAP_MAX_DP) * density).roundToInt()
+
+/**
+ * The overlap that hides the seam between the chip's square bottom edge and the floating card's
+ * rounded top edge, in pixels.
+ *
+ * Only at a zero gap. While the two edges touch, a fractional layout coordinate can leave a
+ * hairline of the window background showing between them, and one dp of overlap covers it. Once
+ * the chip is lifted off the card there is no shared edge left to hide, and the clearance has to
+ * be exactly the setting -- an unconditional overlap would shave a dp off every non-zero value.
+ */
+internal fun floatingPreeditOverlapPx(gapDp: Int, density: Float): Int =
+    if (preeditGapPx(gapDp, density) == 0) density.roundToInt() else 0
+
+/**
  * Narrowest the floating keyboard is allowed to get, in dp.
  *
  * The width preference is a share, and the share is taken against a reference that survives a
@@ -110,10 +134,11 @@ internal fun resizedPercent(startPercent: Int, startPixels: Int, deltaPixels: Fl
 internal const val FLOATING_KEYBOARD_MIN_WIDTH_DP = 160
 
 /**
- * Lower bound of the width setting, mirroring `AppPrefs.Keyboard.floatingKeyboardWidth`'s slider.
+ * Floor for the floating keyboard's width share, below the absolute dp minimum above.
  *
- * The absolute dp minimum above usually lands above this on a phone, so this only matters on very
- * narrow screens -- but it must never allow a width the settings slider cannot represent.
+ * The absolute minimum usually lands above this on a phone, so this only binds on very narrow
+ * screens. It is a share rather than a size because the stored value is a share, and a drag that
+ * reached a smaller one could not be written back without changing what the number means.
  */
 internal const val MIN_FLOATING_KEYBOARD_WIDTH_PERCENT = 40
 
@@ -204,8 +229,8 @@ internal fun floatingScaleY(
 }
 
 /**
- * Horizontal anchor of an IME-level bottom toggle. They all pin themselves to the bottom
- * edge of the keyboard surface as well.
+ * Horizontal anchor of the floating keyboard's grips, which pin themselves to the bottom edge of
+ * the keyboard surface.
  */
 internal enum class ActionHandleAnchor {
     /** Bottom-left corner of the surface. */
@@ -213,53 +238,7 @@ internal enum class ActionHandleAnchor {
 
     /** Bottom-right corner of the surface. */
     SURFACE_END,
-
-    /** Right after the drag grip, which forms a left-side cluster with the toggles. */
-    AFTER_DRAG_GRIP,
-
-    /** Right after the candidate window toggle. */
-    AFTER_CANDIDATES_WINDOW_TOGGLE,
-
-    /** Right after the floating keyboard toggle. */
-    AFTER_FLOATING_KEYBOARD_TOGGLE,
-
-    /** Right after the toolbar toggle, keeping the two toggles side by side. */
-    AFTER_TOOLBAR_TOGGLE,
 }
-
-/** The IME-level toggles that share the bottom edge of the keyboard surface. */
-internal enum class BottomToggle {
-    /** Shows or hides the floating candidate window that replaces the keyboard. */
-    CANDIDATES_WINDOW,
-
-    /** Docks the keyboard or sets it floating. */
-    FLOATING_KEYBOARD,
-
-    /** Shows or hides the input bar. */
-    TOOLBAR,
-}
-
-/**
- * Anchors of the bottom toggles, in layout order.
- *
- * A floating keyboard keeps every toggle after the drag grip, because the resize grip owns
- * the bottom-right corner. Docked mode hides both grips and frees the corners, so the row
- * starts in the bottom-left one and the toolbar toggle moves to the bottom-right one.
- */
-internal fun actionHandleAnchors(floating: Boolean): List<Pair<BottomToggle, ActionHandleAnchor>> =
-    if (floating) {
-        listOf(
-            BottomToggle.TOOLBAR to ActionHandleAnchor.AFTER_DRAG_GRIP,
-            BottomToggle.FLOATING_KEYBOARD to ActionHandleAnchor.AFTER_TOOLBAR_TOGGLE,
-            BottomToggle.CANDIDATES_WINDOW to ActionHandleAnchor.AFTER_FLOATING_KEYBOARD_TOGGLE,
-        )
-    } else {
-        listOf(
-            BottomToggle.CANDIDATES_WINDOW to ActionHandleAnchor.SURFACE_START,
-            BottomToggle.FLOATING_KEYBOARD to ActionHandleAnchor.AFTER_CANDIDATES_WINDOW_TOGGLE,
-            BottomToggle.TOOLBAR to ActionHandleAnchor.SURFACE_END,
-        )
-    }
 
 /** Horizontal margins of one bottom handle, in pixels. */
 internal data class HandleMargins(
@@ -286,23 +265,28 @@ internal fun handleMargins(anchor: ActionHandleAnchor, margin: Int): HandleMargi
         end = if (anchor == ActionHandleAnchor.SURFACE_END) margin else 0,
     )
 
-/** Edge length of the bottom handle icons, which the bottom bar has to be able to fit. */
+/** Edge length of the bottom handle icons, which the bottom strip has to be able to fit. */
 internal const val ACTION_HANDLE_SIZE_DP = 36
 
+/** Distance a bottom grip keeps from the surface edge, in dp. */
+internal const val GRIP_MARGIN_DP = 12
+
 /**
- * Height of the bottom bar, in dp.
+ * Height of the strip reserved below the keys, in dp.
  *
- * [configuredDp] is the preference, where 0 means "auto" and defers to [themePaddingDp], the
- * theme's `keyboard_padding_bottom`. Either way the result never drops below [minHeightDp]: the
- * room the handle row occupies is the whole point of the bar, and a strip shorter than the
- * toggles is exactly what lets them overlap the keys. Themes commonly reserve less than that
- * (the IME's own default is 36dp), so they get the toggle height instead of their own.
+ * The strip exists for one reason: the IME toggles live in it, and a theme that reserves less
+ * room than they need (`keyboard_padding_bottom: 0` is common) would have them sitting on the
+ * keys. So the theme's own value is honoured as a floor, never as a ceiling — a theme can make
+ * the strip taller, and it can never make it too short to hold the toggles.
+ *
+ * The strip is deliberately *not* painted: the keyboard's own background already covers the whole
+ * surface (see [applyKeyboardBackdrop]), so filling it again with the same translucent colour
+ * composited twice and left a visible band across the bottom of the keyboard.
  */
-internal fun bottomBarHeightDp(
-    configuredDp: Int,
+internal fun reservedBottomStripDp(
     themePaddingDp: Int,
-    minHeightDp: Int,
-): Int = maxOf(if (configuredDp <= 0) themePaddingDp else configuredDp, minHeightDp)
+    handleSizeDp: Int,
+): Int = maxOf(themePaddingDp, handleSizeDp)
 
 /** Lets a floating keyboard move with two fingers even when keys fill its surface. */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
@@ -565,8 +549,21 @@ class InputView(
     private var floatingKeyboardBaseHeight = keyboardPrefs.floatingKeyboardHeight.getValue()
     private var floatingKeyboardWidth = floatingKeyboardBaseWidth
     private var floatingKeyboardHeight = floatingKeyboardBaseHeight
-    private val floatingPreeditOffsetX = keyboardPrefs.floatingPreeditOffsetX.getValue()
-    private val floatingPreeditOffsetY = keyboardPrefs.floatingPreeditOffsetY.getValue()
+    private var preeditOffsetPercent = keyboardPrefs.preeditOffsetPercent.getValue().coerceIn(0, 100)
+
+    /** The clearance the preedit keeps above the keyboard, in pixels. */
+    private val preeditGap: Int
+        get() = preeditGapPx(
+            gapDp = keyboardPrefs.preeditKeyboardGap.getValue(),
+            density = resources.displayMetrics.density,
+        )
+
+    /** The one-dp seam overlap the floating card needs while the chip sits flush on it. */
+    private val preeditSeam: Int
+        get() = floatingPreeditOverlapPx(
+            gapDp = keyboardPrefs.preeditKeyboardGap.getValue(),
+            density = resources.displayMetrics.density,
+        )
 
     private val keyboardBackground =
         imageView {
@@ -652,39 +649,26 @@ class InputView(
     }
 
     /**
-     * Height of the bottom strip: the one the theme reserves (its `keyboard_padding_bottom`, per
-     * orientation) when the bottom bar is off, and the configured / fitted one when it is on.
+     * Height of the strip below the keys: the theme's own reservation (`keyboard_padding_bottom`
+     * or its landscape counterpart), never shorter than the toggle row it has to hold.
      */
     private val keyboardBottomPaddingPx: Int
         get() {
             val landscape = context.isLandscapeMode()
             val themePadding =
                 if (landscape) keyboardBottomPaddingLandscape else keyboardBottomPadding
-            if (!keyboardPrefs.bottomBarEnabled.getValue()) return dp(themePadding)
-            // Landscape has its own height: the strip comes out of the screen's short dimension
-            // there, so the portrait value would eat into a keyboard that is already short.
-            val configured =
-                if (landscape) {
-                    keyboardPrefs.bottomBarHeightLandscape.getValue()
-                } else {
-                    keyboardPrefs.bottomBarHeight.getValue()
-                }
-            return dp(
-                bottomBarHeightDp(
-                    configuredDp = configured,
-                    themePaddingDp = themePadding,
-                    // Room for the handle row itself: the strip holds the toggles, so it can
-                    // never be shorter than they are. (Their horizontal margin is a side matter
-                    // and must not enlarge the strip -- that is what made the old setting feel
-                    // like it padded all four edges at once.)
-                    minHeightDp = ACTION_HANDLE_SIZE_DP,
-                ),
-            )
+            return dp(reservedBottomStripDp(themePadding, ACTION_HANDLE_SIZE_DP))
         }
 
-    /** Distance kept between the bottom handle row (grips and toggles) and the surface edges. */
+    /**
+     * Distance kept between a grip and the surface it is pinned to.
+     *
+     * The floating card has rounded corners of its own, and a grip sitting flush in one of them
+     * would be half outside the card's outline. Fixed rather than a setting: the only handles left
+     * down here are the two grips, and there is one sensible distance for them.
+     */
     private val bottomHandleMarginPx: Int
-        get() = dp(keyboardPrefs.bottomToggleMargin.getValue())
+        get() = dp(GRIP_MARGIN_DP)
 
     val keyboardView: View
 
@@ -717,21 +701,6 @@ class InputView(
 
     private val resizeHandle = FloatingResizeHandle(context, ::handleFloatingResize)
     private val moveHandle = FloatingMoveHandle(context) { handleFloatingDrag(it) }
-    private val inputBarToggleHandle = FloatingActionHandle(context).apply {
-        setOnClickListener {
-            dispatchKeyboardCommand("switch_hide_input_bar")
-        }
-    }
-    private val floatingModeToggleHandle = FloatingActionHandle(context).apply {
-        setOnClickListener {
-            dispatchKeyboardCommand("switch_floating_keyboard")
-        }
-    }
-    private val candidatesWindowToggleHandle = FloatingActionHandle(context).apply {
-        setOnClickListener {
-            dispatchKeyboardCommand("switch_candidates_window")
-        }
-    }
 
     private fun dispatchKeyboardCommand(command: String) {
         commonKeyboardActionListener.listener.onAction(KeyActionManager.getCommandAction(command))
@@ -879,14 +848,87 @@ class InputView(
                 width = keyboardView.width
             }
         }
-        preeditRoot.translationX =
-            keyboardView.left + keyboardView.translationX - preeditRoot.left + dp(floatingPreeditOffsetX)
+        // Horizontal position is window-wide and shared by both modes; only the vertical one
+        // rides the card while floating. The distance itself is the gap preference's bottom
+        // margin, already laid out above the card; what is left is the seam overlap -- and that
+        // is zero as soon as the gap has lifted the chip off the card.
+        applyPreeditHorizontalPosition()
         preeditRoot.pivotX = 0f
         preeditRoot.scaleX = keyboardView.scaleX
-        // The extra 1 dp overlap hides fractional-pixel seams between the square
-        // preedit bottom edge and the floating keyboard's rounded top edge.
-        preeditRoot.translationY = keyboardView.translationY + dp(floatingPreeditOffsetY + 1)
+        preeditRoot.translationY = keyboardView.translationY + preeditSeam
         preedit.updateTouchReceiverPosition()
+    }
+
+    /**
+     * Puts the preedit at its horizontal position along the keyboard's own span.
+     *
+     * The span is the keyboard area itself -- the full-width keyboard while docked, the floating
+     * card while floating -- so the preedit is always placed against the keyboard and can never
+     * leave it: 0% sits flush with the keyboard's left edge and 100% with its right, the value
+     * being a percentage of the room the preedit may travel (the span minus its own width). The
+     * preedit's width changes with every keystroke, so this runs from a layout listener rather
+     * than once at build time.
+     */
+    private fun applyPreeditHorizontalPosition() {
+        val root = preedit.ui.root
+        val chip = preedit.ui.preedit
+        val trackLeft = keyboardView.left + keyboardView.translationX
+        val travel = (keyboardView.width * keyboardView.scaleX - chip.width).coerceAtLeast(0f)
+        root.translationX =
+            trackLeft + travel * (preeditOffsetPercent / 100f) - root.paddingStart - root.left
+    }
+
+    /** Re-places the preedit after its position preference changed, without a rebuild. */
+    fun refreshPreeditPosition() {
+        // The captured value would be stale; re-read through the delegate.
+        preeditOffsetPercent = keyboardPrefs.preeditOffsetPercent.getValue().coerceIn(0, 100)
+        applyPreeditHorizontalPosition()
+    }
+
+    /** Re-applies the preedit's clearance above the keyboard, without a rebuild. */
+    fun refreshPreeditGap() {
+        applyPreeditGap()
+        // Floating, the chip is part of the surface's touchable rectangle, so the window manager
+        // has to hear about its new bounds; docked, the edge the region ends at does not move.
+        if (isFloatingKeyboardEnabled) service.requestInputInsetsUpdate()
+    }
+
+    /** Re-applies the chip's own look -- corners and fill -- after a settings change. */
+    fun refreshPreeditAppearance() {
+        preedit.refreshAppearance()
+    }
+
+    /**
+     * Sets how far the preedit sits above the keyboard.
+     *
+     * The preedit is a sibling anchored above the keyboard, so the gap is that constraint's
+     * bottom margin: the chip does not change size, the keyboard does not move, and the space in
+     * between belongs to neither view. A margin also cannot overlap the keys -- the chip's bottom
+     * edge is pinned to the keyboard's top edge minus the margin -- and being a dp value it means
+     * the same physical distance at any density or window size. Nothing is rebuilt, which is what
+     * makes the change land on the keyboard that is already on screen.
+     *
+     * The edge it measures against is the card's top edge while the keyboard floats, which is why
+     * one preference covers both modes: the floating layer is translated as a whole, and the
+     * preedit is translated with it, so a margin in the layout is what the chip keeps off the card.
+     * At zero the floating layer adds [preeditSeam] back to stay flush; any larger value is the
+     * clearance itself. The cost is that the gap falls inside the single touchable rectangle the
+     * floating surface reports, so a drag there moves the card rather than reaching the app -- a
+     * one-preference layout is worth that, and the band only exists while it is deliberately left
+     * empty.
+     */
+    private fun applyPreeditGap() {
+        preedit.ui.root.updateLayoutParams<LayoutParams> { bottomMargin = preeditGap }
+        // Both followers read the preedit's laid-out position, so they have to wait for the new
+        // margin: floating, the chip is placed by a translation computed from that position; docked,
+        // only the touch receiver -- a popup anchored to the view -- has to follow it.
+        preedit.ui.root.doOnLayout {
+            if (isFloatingKeyboardEnabled) {
+                syncFloatingPreeditPosition()
+            } else {
+                preedit.updateTouchReceiverPosition()
+            }
+        }
     }
 
     private fun applyFloatingPosition(
@@ -909,7 +951,7 @@ class InputView(
         val floatingTop =
             preedit.ui.root
                 .takeIf { it.visibility == View.VISIBLE && it.height > 0 }
-                ?.let { it.top + dp(floatingPreeditOffsetY + 1) }
+                ?.let { it.top + preeditSeam }
                 ?: keyboardView.top
         val minTranslationY = -(floatingTop - dp(16)).coerceAtLeast(0).toFloat()
         val maxTranslationY =
@@ -1063,11 +1105,12 @@ class InputView(
             keyboardView.scaleX = 1f
             keyboardView.scaleY = 1f
             preedit.ui.root.apply {
-                translationX = 0f
                 translationY = 0f
                 scaleX = 1f
                 updateLayoutParams { width = wrapContent }
             }
+            // The preedit's own width is the travel span again, so re-place it.
+            applyPreeditHorizontalPosition()
         }
 
         // Wait for the resized card to be measured, then rebuild only the key grid.
@@ -1099,7 +1142,31 @@ class InputView(
 
     fun refreshHideInputBar() {
         inputBar.onHideInputBarChanged()
-        updateFloatingActionHandles()
+    }
+
+    /** Re-applies the composing strip's inset-bar background after its switch changed. */
+    fun refreshStripBackground() {
+        inputBar.refreshStripBackground()
+    }
+
+    /** Re-applies the composing strip's length after its preference changed. */
+    fun refreshStripLength() {
+        inputBar.refreshStripLength()
+    }
+
+    /** Shows or hides the strip row's two corner toggles after their switch changed. */
+    fun refreshCornerToggles() {
+        inputBar.refreshCornerToggles()
+    }
+
+    /** Re-sizes the input bar after the strip-to-keyboard gap changed. */
+    fun refreshStripGap() {
+        inputBar.refreshStripGap()
+    }
+
+    /** Re-sizes the input bar after the two-row strip's second line changed its text size. */
+    fun refreshTwoRow() {
+        inputBar.refreshTwoRow()
     }
 
     private fun configureFloatingSurface(enabled: Boolean) {
@@ -1139,47 +1206,28 @@ class InputView(
         if (moveHandle.parent == null) {
             surface.add(moveHandle, lParams(dp(ACTION_HANDLE_SIZE_DP), dp(ACTION_HANDLE_SIZE_DP)) { bottomOfParent() })
         }
-        if (inputBarToggleHandle.parent == null) {
-            surface.add(inputBarToggleHandle, lParams(dp(ACTION_HANDLE_SIZE_DP), dp(ACTION_HANDLE_SIZE_DP)) { bottomOfParent() })
-        }
-        if (floatingModeToggleHandle.parent == null) {
-            surface.add(floatingModeToggleHandle, lParams(dp(ACTION_HANDLE_SIZE_DP), dp(ACTION_HANDLE_SIZE_DP)) { bottomOfParent() })
-        }
-        if (candidatesWindowToggleHandle.parent == null) {
-            surface.add(candidatesWindowToggleHandle, lParams(dp(ACTION_HANDLE_SIZE_DP), dp(ACTION_HANDLE_SIZE_DP)) { bottomOfParent() })
-        }
         if (resizeHandle.parent == null) {
             surface.add(resizeHandle, lParams(dp(ACTION_HANDLE_SIZE_DP), dp(ACTION_HANDLE_SIZE_DP)) { bottomOfParent() })
         }
-        // Both the anchors and the edge margin depend on state that can change at runtime (the
-        // mode, and the margin preference), so the whole bottom row is placed here instead of
-        // in the layout params it was added with.
-        placeBottomHandles(enabled)
-        updateFloatingActionHandles()
+        // The grips' anchors depend on the mode, so the row is placed here rather than in the
+        // layout params it was added with.
+        placeBottomHandles()
     }
 
     /**
-     * Places the bottom row: the two floating grips and the three toggles.
+     * Places the floating keyboard's two grips.
      *
-     * The toggles spread out differently per mode, every handle is pinned inside the bottom strip,
-     * and the corner-most ones keep the configured distance from the surface's sides, so a
-     * rounded screen corner cannot clip them or eat their taps.
+     * They are the only controls left in the bottom strip: the IME toggles that used to sit beside
+     * them (input bar, floating, candidate window) are quick switches now, reached through the
+     * strip's own toggle, which is where the user goes for that row of controls anyway.
      */
-    private fun placeBottomHandles(floating: Boolean) {
+    private fun placeBottomHandles() {
         val margin = bottomHandleMarginPx
         moveHandle.updateLayoutParams<ConstraintLayout.LayoutParams> {
             anchorTo(ActionHandleAnchor.SURFACE_START, margin)
         }
         resizeHandle.updateLayoutParams<ConstraintLayout.LayoutParams> {
             anchorTo(ActionHandleAnchor.SURFACE_END, margin)
-        }
-        actionHandleAnchors(floating).forEach { (toggle, anchor) ->
-            val handle = when (toggle) {
-                BottomToggle.CANDIDATES_WINDOW -> candidatesWindowToggleHandle
-                BottomToggle.FLOATING_KEYBOARD -> floatingModeToggleHandle
-                BottomToggle.TOOLBAR -> inputBarToggleHandle
-            }
-            handle.updateLayoutParams<ConstraintLayout.LayoutParams> { anchorTo(anchor, margin) }
         }
     }
 
@@ -1204,90 +1252,19 @@ class InputView(
         when (anchor) {
             ActionHandleAnchor.SURFACE_START -> startOfParent()
             ActionHandleAnchor.SURFACE_END -> endOfParent()
-            ActionHandleAnchor.AFTER_DRAG_GRIP -> startToEndOf(moveHandle)
-            ActionHandleAnchor.AFTER_CANDIDATES_WINDOW_TOGGLE -> startToEndOf(candidatesWindowToggleHandle)
-            ActionHandleAnchor.AFTER_FLOATING_KEYBOARD_TOGGLE -> startToEndOf(floatingModeToggleHandle)
-            ActionHandleAnchor.AFTER_TOOLBAR_TOGGLE -> startToEndOf(inputBarToggleHandle)
         }
-        // Vertical placement inside the strip. With the bottom bar on, the row is centred in it:
-        // the strip's height is the user's setting, and a row glued to its bottom edge looks
-        // stranded in a tall one. The strip is never shorter than a handle while the bar is on
-        // (that is what the height floor guarantees), so centring cannot push one off the edge.
-        topToTop = ConstraintLayout.LayoutParams.UNSET
+        // Vertical placement inside the strip: centred, so a theme that reserves a tall one
+        // does not leave the row stranded against its bottom edge. The strip is never shorter
+        // than a handle (that is what the height floor guarantees), so centring cannot push one
+        // off the edge either.
+        topToTop = bottomPaddingSpace.id
         topToBottom = ConstraintLayout.LayoutParams.UNSET
         bottomToTop = ConstraintLayout.LayoutParams.UNSET
         bottomToBottom = bottomPaddingSpace.id
-        if (keyboardPrefs.bottomBarEnabled.getValue()) {
-            topToTop = bottomPaddingSpace.id
-        }
         bottomMargin = 0
         val margins = handleMargins(anchor, margin)
         marginStart = margins.start
         marginEnd = margins.end
-    }
-
-    private fun updateFloatingActionHandles() {
-        val toolbarHidden = keyboardPrefs.hideInputBar.getValue()
-        // With the bottom bar on, the toggles sit on the scheme's keyboard background, so they
-        // take the scheme's key text colour -- the same contrast every key label relies on.
-        // Without it they float over whatever the theme paints there, where guessing from the
-        // keyboard background's luminance is the safer bet.
-        val handleTint =
-            if (keyboardPrefs.bottomBarEnabled.getValue()) {
-                scope.colors.keyTextColor
-            } else if (ColorUtils.calculateLuminance(scope.colors.keyboardBackColor) > 0.5) {
-                Color.DKGRAY
-            } else {
-                Color.WHITE
-            }
-        inputBarToggleHandle.apply {
-            setAction(
-                if (toolbarHidden) R.drawable.ic_baseline_more_horiz_24 else R.drawable.ic_baseline_arrow_drop_down_24,
-                context.getString(if (toolbarHidden) R.string.show_input_bar else R.string.hide_input_bar),
-                handleTint,
-            )
-            visibility = View.VISIBLE
-        }
-        floatingModeToggleHandle.apply {
-            setAction(
-                if (isFloatingKeyboardEnabled) {
-                    R.drawable.ic_baseline_keyboard_24
-                } else {
-                    R.drawable.ic_floating_keyboard_24
-                },
-                context.getString(
-                    if (isFloatingKeyboardEnabled) R.string.dock_keyboard else R.string.enable_floating_keyboard,
-                ),
-                handleTint,
-            )
-            visibility =
-                if (!isFloatingKeyboardEnabled || toolbarHidden) View.VISIBLE else View.GONE
-        }
-        val candidatesWindowEnabled = candidatesMode != PopupCandidatesMode.DISABLED
-        candidatesWindowToggleHandle.apply {
-            setAction(
-                if (candidatesWindowEnabled) {
-                    R.drawable.ic_baseline_deselect_24
-                } else {
-                    R.drawable.ic_baseline_list_alt_24
-                },
-                context.getString(
-                    if (candidatesWindowEnabled) R.string.hide_candidates_window else R.string.show_candidates_window,
-                ),
-                handleTint,
-            )
-            visibility = View.VISIBLE
-        }
-    }
-
-    /** Re-reads the candidate window mode, which the bottom toggle mirrors. */
-    fun refreshCandidatesWindowToggle() {
-        updateFloatingActionHandles()
-    }
-
-    /** Re-applies the bottom toggle side margin, which the settings screen changes at runtime. */
-    fun refreshBottomHandleMargin() {
-        placeBottomHandles(isFloatingKeyboardEnabled)
     }
 
     /**
@@ -1297,20 +1274,44 @@ class InputView(
      */
     fun refreshBottomBar() {
         applyBottomBar()
-        updateFloatingActionHandles()
         service.requestInputInsetsUpdate()
+    }
+
+    /**
+     * The keyboard's own surface: the theme's background image when it has a usable one, and the
+     * keyboard's back colour underneath it either way.
+     *
+     * The colour is not optional. Without it, a theme that names a background image the device
+     * cannot load — a file that was never pushed, a path that does not resolve — leaves this view
+     * empty, and an empty view over an IME window shows the window's own background: `colorSurface`,
+     * which is white under a light app theme. The keyboard then comes out white whatever the colour
+     * scheme says, and no scheme can change it.
+     *
+     * Painted as the view's background rather than as a second layer, because that puts it *under*
+     * the image: a theme with a translucent image keeps the colour showing through it, and a theme
+     * with no image gets a keyboard in its own colour instead of a hole.
+     *
+     * That colour is also the whole of the frosted-glass effect: a translucent back colour
+     * composited over the app behind is what stands in for a blur. A real cross-window blur was
+     * built and then removed (2026-10-14) — the platform only blurs the whole IME window, which
+     * would frost the app content above the keyboard along with the panel. Should that ever
+     * change, this is the only place that needs to know.
+     */
+    private fun applyKeyboardBackdrop() {
+        keyboardBackground.background =
+            GradientDrawable().apply { setColor(scope.colors.keyboardBackColor) }
+        keyboardBackground.imageDrawable = scope.drawable("keyboard_background")
     }
 
     /** Restyles colors after a scheme switch without rebuilding the view tree. */
     fun refreshColors() {
-        keyboardBackground.imageDrawable = scope.drawable("keyboard_background")
+        applyKeyboardBackdrop()
         if (isFloatingKeyboardEnabled) {
             (keyboardView.background as? GradientDrawable)?.setColor(scope.colors.keyboardBackColor)
         }
         applyBottomBar()
         resizeHandle.setGripColor(scope.colors.keyboardBackColor)
         moveHandle.setGripColor(scope.colors.keyboardBackColor)
-        updateFloatingActionHandles()
         popup.refreshColors()
         keyboardWindow.refreshColors()
         inputBar.refreshColors()
@@ -1328,7 +1329,7 @@ class InputView(
         // show KeyboardWindow by default
         windowManager.attachWindow(KeyboardWindow)
 
-        keyboardBackground.imageDrawable = scope.drawable("keyboard_background")
+        applyKeyboardBackdrop()
 
         keyboardView =
             FloatingKeyboardContainer(context, isFloatingKeyboardEnabled, ::handleFloatingDrag).apply {
@@ -1394,6 +1395,9 @@ class InputView(
 
         updateKeyboardSize()
 
+        // The preedit stays a sibling above the keyboard in both modes: the floating position math
+        // moves it with the surface, and while docked it must not share the composing strip --
+        // a long composition would take that strip over and squeeze the candidates into a sliver.
         add(
             preedit.ui.root,
             lParams(wrapContent, wrapContent) {
@@ -1401,6 +1405,14 @@ class InputView(
                 startOfParent()
             },
         )
+        // The gap is a property of that constraint, so it is applied right after it exists.
+        applyPreeditGap()
+
+        // The chip is what travels, and its width changes with every keystroke, so the position
+        // follows the chip's re-measures rather than only the root's.
+        preedit.ui.preedit.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            applyPreeditHorizontalPosition()
+        }
 
         add(
             keyboardView,
@@ -1419,6 +1431,13 @@ class InputView(
         }
         if (isFloatingKeyboardEnabled) {
             keyboardView.post {
+                // The build-time percent was computed before the window had a width and fell back
+                // to a full-width share; now that the geometry is known, put the chosen width
+                // back. Without this a view *built* while floating (an input-view rebuild, a
+                // theme switch) would stay full width until the next toggle re-ran this maths.
+                keyboardView.updateLayoutParams<LayoutParams> {
+                    matchConstraintPercentWidth = layoutWidthPercent(floatingKeyboardWidth) / 100f
+                }
                 // Re-apply the persisted height percentage: the key grid's height comes from the
                 // theme, so nothing else would carry it across this rebuild.
                 applyFloatingScale()
@@ -1480,24 +1499,16 @@ class InputView(
     }
 
     /**
-     * Applies the bottom strip that the handle row sits in: its height ([keyboardBottomPaddingPx])
-     * and, while the bar is enabled, the scheme's keyboard background as its fill.
+     * Applies the strip the toggle row sits in: its height only.
      *
-     * The fill is what makes the strip read as part of the keyboard rather than as a gap the
-     * toggles happen to be parked in, and it keeps working when a theme paints the keyboard with a
-     * background *image* -- the strip then still follows the colour scheme.
+     * It gets no fill of its own. The keyboard's background already covers the whole surface, so
+     * painting the strip with the same translucent colour composited it twice over the frosted
+     * panel and left a visibly lighter band across the bottom of the keyboard — the strip read as
+     * a separate slab rather than as the keyboard continuing into the space its toggles need.
      */
     private fun applyBottomBar() {
         bottomPaddingSpace.updateLayoutParams { height = keyboardBottomPaddingPx }
-        bottomPaddingSpace.background =
-            if (keyboardPrefs.bottomBarEnabled.getValue()) {
-                GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    setColor(scope.colors.keyboardBackColor)
-                }
-            } else {
-                null
-            }
+        bottomPaddingSpace.background = null
     }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {

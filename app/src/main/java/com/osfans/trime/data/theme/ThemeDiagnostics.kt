@@ -14,6 +14,7 @@ import com.osfans.trime.util.mapping
 import com.osfans.trime.util.pairs
 import com.osfans.trime.util.sequence
 import com.osfans.trime.util.string
+import kotlin.math.roundToInt
 import timber.log.Timber
 
 /**
@@ -49,6 +50,9 @@ object ThemeDiagnostics {
         FONT_NOT_A_LIST,
         IGNORED_TOOL_BAR_KEY,
         IGNORED_LIQUID_KEYBOARD_KEY,
+
+        /** A built-in settings override that keeps the theme's own value off the keyboard. */
+        SHADOWED_BY_BUILTIN,
     }
 
     enum class Severity {
@@ -166,16 +170,27 @@ object ThemeDiagnostics {
     }
 
     /**
-     * Renders [findings] as the text of a bug report: which theme was checked
-     * and what the checks found. [findings] is null when the checks themselves
-     * failed to run, which the report says instead of pretending all is well.
+     * Renders [findings] as the text of a bug report: which theme was checked, what the checks
+     * found, and — when [liveFindings] are given — what the running state is overriding right
+     * now. [findings] is null when the static checks themselves failed to run, which the report
+     * says instead of pretending all is well.
      */
     fun format(
         themeId: String,
         themeName: String,
         findings: List<Finding>?,
+        liveFindings: List<Finding> = emptyList(),
     ): String = buildString {
         appendLine("Theme: $themeName ($themeId)")
+        // Live findings first: they describe what the keyboard is doing *now*, which is usually
+        // the question that sent the reader here; the static checks describe the file.
+        if (liveFindings.isNotEmpty()) {
+            appendLine("Live findings: ${liveFindings.size}")
+            liveFindings.forEach { finding ->
+                val path = finding.path?.let { "$it: " } ?: ""
+                appendLine("[${finding.severity}] $path${finding.message} (${finding.code})")
+            }
+        }
         when {
             findings == null ->
                 appendLine("Static checks could not run for this theme.")
@@ -192,6 +207,86 @@ object ThemeDiagnostics {
             }
         }
     }
+
+    /**
+     * The built-in overrides that are in charge right now, as findings.
+     *
+     * The checks above read the theme's *file*. This one reads the state the keyboard is in:
+     * while a domain's source is the built-in settings, every stored knob outranks the theme's
+     * own — a theme edit to that key reaches nothing until the source changes back. The
+     * diagnostics screen is where a theme author goes to ask "why did my edit do nothing", so
+     * that answer belongs here, next to the file's own report.
+     *
+     * The sizes come first, then the layout, matching the order of the screens. One finding per
+     * key, naming both values, so the message stands on its own in a bug report. A stored key
+     * this build does not know is skipped: it changes nothing either way, and the editor already
+     * reports it as unrecognised.
+     *
+     * Pure, like [lint]: both sides of each source gate are pinned by a test.
+     */
+    fun builtinOverridesInEffect(
+        styleOverrides: Map<String, Float>,
+        styleInCharge: Boolean,
+        layoutOverrides: Map<String, Float>,
+        layoutInCharge: Boolean,
+        themeStyle: GeneralStyle,
+    ): List<Finding> =
+        buildList {
+            if (styleInCharge) {
+                addAll(
+                    shadowed(
+                        overrides = styleOverrides,
+                        domain = "size",
+                        resolve = { StyleSemantic.from(it) },
+                        keyOf = { it.key },
+                        themeValueOf = { themeStyle.valueOf(it) },
+                    ),
+                )
+            }
+            if (layoutInCharge) {
+                addAll(
+                    shadowed(
+                        overrides = layoutOverrides,
+                        domain = "layout",
+                        resolve = { LayoutSemantic.from(it) },
+                        keyOf = { it.key },
+                        themeValueOf = { themeStyle.valueOf(it) },
+                    ),
+                )
+            }
+        }
+
+    /**
+     * One finding per stored key of one domain, at the theme key it overrides.
+     *
+     * [resolve] is what makes this work for two different vocabularies: it maps the stored string
+     * to the build's own semantic type, which then supplies the canonical key and the theme value
+     * — and a name neither vocabulary knows comes back null and is skipped.
+     */
+    private fun <T> shadowed(
+        overrides: Map<String, Float>,
+        domain: String,
+        resolve: (String) -> T?,
+        keyOf: (T) -> String,
+        themeValueOf: (T) -> Float,
+    ): List<Finding> =
+        overrides.entries
+            .mapNotNull { (key, value) -> resolve(key)?.let { Triple(keyOf(it), value, themeValueOf(it)) } }
+            .sortedBy { it.first }
+            .map { (canonical, value, themeValue) ->
+                Finding(
+                    Severity.INFO,
+                    Code.SHADOWED_BY_BUILTIN,
+                    "'$canonical' is overridden by the built-in $domain settings " +
+                        "(theme ${formatKnobValue(themeValue)} → built-in ${formatKnobValue(value)}); " +
+                        "theme edits have no effect while the $domain source is the built-in one",
+                    "style/$canonical",
+                )
+            }
+
+    /** `12` rather than `12.0`; a fractional override keeps its fraction. */
+    private fun formatKnobValue(value: Float): String =
+        if (value == value.roundToInt().toFloat()) value.roundToInt().toString() else value.toString()
 
     private fun MutableList<Finding>.reportUnknownKeys(
         node: YamlMap?,

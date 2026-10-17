@@ -39,6 +39,79 @@ class MainFragment : Fragment() {
     ) {
         super.onViewCreated(view, savedInstanceState)
 
+        // Four groups, one axis each: what goes in, what the keys are, how it looks, where the
+        // data lives. A page used to be named after whatever subsystem implemented it, which is
+        // why "编码区" was spread over four of them; the groups follow the object a user is
+        // looking at, and the page names follow it too.
+        val inputDestinations =
+            listOf(
+                Destination(
+                    R.string.section_input_behavior,
+                    R.string.settings_general_summary,
+                    R.drawable.ic_baseline_tune_24,
+                    NavigationRoute.General,
+                ),
+                Destination(
+                    R.string.page_candidate_area,
+                    R.string.settings_candidates_window_summary,
+                    R.drawable.ic_baseline_list_alt_24,
+                    NavigationRoute.CandidatesWindow,
+                ),
+                Destination(
+                    R.string.page_preedit,
+                    R.string.settings_preedit_appearance_summary,
+                    R.drawable.ic_baseline_view_comfy_24,
+                    NavigationRoute.PreeditAppearance,
+                ),
+                Destination(
+                    R.string.clipboard,
+                    R.string.settings_clipboard_summary,
+                    R.drawable.ic_clipboard_24,
+                    NavigationRoute.Clipboard,
+                ),
+            )
+        val keyboardDestinations =
+            listOf(
+                Destination(
+                    R.string.page_keyboard_layout,
+                    R.string.settings_virtual_keyboard_summary,
+                    R.drawable.ic_baseline_keyboard_24,
+                    NavigationRoute.VirtualKeyboard,
+                ),
+                Destination(
+                    R.string.section_gesture_timing,
+                    R.string.settings_gesture_timing_summary,
+                    R.drawable.ic_baseline_touch_app_24,
+                    NavigationRoute.GestureTiming,
+                ),
+                Destination(
+                    R.string.feedback,
+                    R.string.settings_feedback_summary,
+                    R.drawable.ic_baseline_phone_24,
+                    NavigationRoute.Feedback,
+                ),
+                Destination(
+                    R.string.shortcut,
+                    R.string.settings_shortcut_summary,
+                    R.drawable.ic_baseline_text_fields_24,
+                    NavigationRoute.Shortcut,
+                ),
+            )
+        val appearanceDestinations =
+            listOf(
+                Destination(
+                    R.string.section_theme_colors,
+                    R.string.settings_theme_summary,
+                    R.drawable.ic_baseline_color_lens_24,
+                    NavigationRoute.Theme,
+                ),
+                Destination(
+                    R.string.page_app_system,
+                    R.string.settings_advanced_summary,
+                    R.drawable.ic_baseline_more_horiz_24,
+                    NavigationRoute.AppSystem,
+                ),
+            )
         val dataDestinations =
             listOf(
                 Destination(
@@ -60,48 +133,11 @@ class MainFragment : Fragment() {
                     NavigationRoute.Profile,
                 ),
             )
-        val experienceDestinations =
-            listOf(
-                Destination(
-                    R.string.general,
-                    R.string.settings_general_summary,
-                    R.drawable.ic_baseline_tune_24,
-                    NavigationRoute.General,
-                ),
-                Destination(
-                    R.string.virtual_keyboard,
-                    R.string.settings_virtual_keyboard_summary,
-                    R.drawable.ic_baseline_keyboard_24,
-                    NavigationRoute.VirtualKeyboard,
-                ),
-                Destination(
-                    R.string.candidates_window,
-                    R.string.settings_candidates_window_summary,
-                    R.drawable.ic_baseline_list_alt_24,
-                    NavigationRoute.CandidatesWindow,
-                ),
-                Destination(
-                    R.string.theme,
-                    R.string.settings_theme_summary,
-                    R.drawable.ic_baseline_color_lens_24,
-                    NavigationRoute.Theme,
-                ),
-                Destination(
-                    R.string.clipboard,
-                    R.string.settings_clipboard_summary,
-                    R.drawable.ic_clipboard_24,
-                    NavigationRoute.Clipboard,
-                ),
-                Destination(
-                    R.string.advanced,
-                    R.string.settings_advanced_summary,
-                    R.drawable.ic_baseline_more_horiz_24,
-                    NavigationRoute.Advanced,
-                ),
-            )
 
+        addDestinations(binding.inputSettingsContainer, inputDestinations)
+        addDestinations(binding.keyboardSettingsContainer, keyboardDestinations)
+        addDestinations(binding.appearanceSettingsContainer, appearanceDestinations)
         addDestinations(binding.dataSettingsContainer, dataDestinations)
-        addDestinations(binding.experienceSettingsContainer, experienceDestinations)
     }
 
     override fun onStart() {

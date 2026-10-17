@@ -16,22 +16,28 @@ import android.view.inputmethod.InlineSuggestion
 import android.view.inputmethod.InlineSuggestionsResponse
 import android.widget.ViewAnimator
 import android.widget.inline.InlineContentView
+import androidx.annotation.DrawableRes
 import androidx.annotation.Keep
 import androidx.annotation.RequiresApi
+import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
+import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import com.osfans.trime.R
 import com.osfans.trime.core.Candidates
 import com.osfans.trime.core.RimeMessage
 import com.osfans.trime.daemon.RimeSession
 import com.osfans.trime.daemon.launchOnReady
+import com.osfans.trime.data.PrivacyMode
 import com.osfans.trime.data.db.ClipboardHelper
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.theme.KeyActionManager
 import com.osfans.trime.data.theme.Theme
 import com.osfans.trime.data.theme.ThemeScope
 import com.osfans.trime.ime.bar.ui.AlwaysUi
-import com.osfans.trime.ime.bar.ui.CandidateUi
+import com.osfans.trime.ime.bar.ui.MonitorCandidateUi
+import com.osfans.trime.ime.bar.ui.ToolButton
+import com.osfans.trime.ime.switches.QuickSwitchWindow
 import com.osfans.trime.ime.bar.ui.TabUi
 import com.osfans.trime.ime.broadcast.InputBroadcastReceiver
 import com.osfans.trime.ime.candidates.compact.CompactCandidateDelegate
@@ -78,14 +84,22 @@ class InputBarDelegate(override val di: DI) :
     private val candidate: CompactCandidateDelegate by instance()
     private val rime: RimeSession by instance()
 
-    val themedHeight = theme.generalStyle.run { candidateViewHeight + commentHeight }
-
     private val prefs = AppPrefs.defaultInstance()
 
-    private val hideQuickBar by prefs.keyboard.hideInputBar
+    /**
+     * The bar's height, in dp.
+     *
+     * The strip's vertical spacing rides on top of the themed height -- twice its value, once for
+     * the air above the strip and once for the air below -- so the spacing is *added* space: the
+     * strip inside the bar keeps its own size and the panel opens up evenly around it.
+     * A getter, not a value: the spacing slider changes it while the tree stays up, and a snapshot
+     * would keep re-applying the height the bar was born with.
+     */
+    val themedHeight: Int
+        get() = theme.generalStyle.run { candidateViewHeight + commentHeight } +
+            2 * prefs.candidates.stripGap.getValue()
 
-    private var blendCompactCandidatesIntoFloatingKeyboard =
-        hideQuickBar && prefs.keyboard.floatingKeyboard.getValue()
+    private val hideQuickBar by prefs.keyboard.hideInputBar
 
     private val clipboardSuggestion by prefs.clipboard.clipboardSuggestion
 
@@ -124,15 +138,18 @@ class InputBarDelegate(override val di: DI) :
     }
 
     private fun evalAlwaysUiState() {
-        val newState =
-            when {
-                isClipboardFresh -> AlwaysUi.State.Clipboard
-                isInlineSuggestionPresent -> AlwaysUi.State.InlineSuggestion
-                else -> AlwaysUi.State.Toolbar
-            }
-        if (newState == alwaysUi.currentState) return
-        alwaysUi.updateState(newState)
+        val newState = desiredAlwaysUiState()
+        if (newState != alwaysUi.currentState) alwaysUi.updateState(newState)
+        // The shell picks between the resident strip row and the takeover row.
+        switchUiByState(barStateMachine.currentState)
     }
+
+    private fun desiredAlwaysUiState(): AlwaysUi.State =
+        when {
+            isClipboardFresh -> AlwaysUi.State.Clipboard
+            isInlineSuggestionPresent -> AlwaysUi.State.InlineSuggestion
+            else -> AlwaysUi.State.Toolbar
+        }
 
     private val swipeDownHideKeyboardCallback: ((KeyBehavior) -> Unit) = { d ->
         if (d == KeyBehavior.SWIPE_DOWN) {
@@ -148,6 +165,17 @@ class InputBarDelegate(override val di: DI) :
                 windowManager.attachWindow(SwitchOptionWindow(di))
             }
         }.apply {
+            // The bottom strip's IME toggles live here now: they are quick switches, reached the
+            // same way the clipboard and the input-mode key are, instead of a row of their own
+            // along the bottom edge of the keyboard.
+            buttonsUi.addButton(
+                commandButton(R.drawable.ic_baseline_arrow_drop_down_24, "switch_hide_input_bar", R.string.toggle_input_bar),
+                null,
+            )
+            buttonsUi.addButton(
+                commandButton(R.drawable.ic_baseline_list_alt_24, "switch_candidates_window", R.string.toggle_candidates_window),
+                null,
+            )
             hideKeyboardButton.apply {
                 setOnClickListener { service.requestHideSelf(0) }
                 onSwipe = swipeDownHideKeyboardCallback
@@ -197,6 +225,23 @@ class InputBarDelegate(override val di: DI) :
         }
     }
 
+    /**
+     * A quick switch that fires one of the keyboard's own commands.
+     *
+     * The commands are the ones the retired bottom toggles used (`switch_*`), so the behaviour is
+     * the same wherever it is triggered from -- including whatever a theme has bound to them.
+     */
+    private fun commandButton(
+        @DrawableRes icon: Int,
+        command: String,
+        @StringRes label: Int,
+    ): ToolButton = ToolButton(context, icon, scope).apply {
+        contentDescription = context.getString(label)
+        setOnClickListener {
+            commonKeyboardActionListener.listener.onAction(KeyActionManager.getCommandAction(command))
+        }
+    }
+
     private fun dismissClipboardSuggestion() {
         clipboardTimeoutJob?.cancel()
         clipboardTimeoutJob = null
@@ -204,16 +249,36 @@ class InputBarDelegate(override val di: DI) :
         evalAlwaysUiState()
     }
 
-    private val candidateUi by lazy {
-        CandidateUi(context, scope, candidate.view).apply {
+    private val tabUi by lazy {
+        TabUi(context, scope)
+    }
+
+    /**
+     * The resident row: the menu button, the composing strip held between the flanks, and the
+     * stow toggle. It stays up through both the idle and the composing states -- the strip simply
+     * receives the candidates -- so the toolbar no longer trades places with the candidate bar.
+     */
+    private val monitorCandidateUi by lazy {
+        val (flankWidth, flankHeight) = alwaysUi.buttonsUi.getButtonSize(theme.toolBar.primaryButton)
+        MonitorCandidateUi(
+            context,
+            scope,
+            candidate.view,
+            alwaysUi.leftMostButton,
+            alwaysUi.buttonsUi.root,
+            flankWidth,
+            flankHeight,
+            swipeDownHideKeyboardCallback,
+            onSwitchesRequested = {
+                // The switches do not fit the strip: bring them up the way the menu brings up its
+                // own list, rather than letting them squeeze each other into unreadable slivers.
+                windowManager.attachWindow(QuickSwitchWindow(di) { alwaysUi.buttonsUi.root })
+            },
+        ).apply {
             unrollButton.apply {
                 onSwipe = swipeDownHideKeyboardCallback
             }
         }
-    }
-
-    private val tabUi by lazy {
-        TabUi(context, scope)
     }
 
     private val barStateMachine =
@@ -241,21 +306,21 @@ class InputBarDelegate(override val di: DI) :
         }
 
     private fun setUnrollButtonToAttach() {
-        candidateUi.unrollButton.setOnClickListener {
+        monitorCandidateUi.unrollButton.setOnClickListener {
             windowManager.attachWindow(FlexboxUnrolledCandidateWindow(di))
         }
-        candidateUi.unrollButton.setIcon(R.drawable.ic_baseline_expand_more_24)
+        monitorCandidateUi.unrollButton.setIcon(R.drawable.ic_baseline_expand_more_24)
     }
 
     private fun setUnrollButtonToDetach() {
-        candidateUi.unrollButton.setOnClickListener {
+        monitorCandidateUi.unrollButton.setOnClickListener {
             windowManager.attachWindow(KeyboardWindow)
         }
-        candidateUi.unrollButton.setIcon(R.drawable.ic_baseline_expand_less_24)
+        monitorCandidateUi.unrollButton.setIcon(R.drawable.ic_baseline_expand_less_24)
     }
 
     private fun setUnrollButtonEnabled(enabled: Boolean) {
-        candidateUi.unrollButton.visibility = if (enabled) View.VISIBLE else View.INVISIBLE
+        monitorCandidateUi.setUnrollAvailable(enabled)
     }
 
     override fun onCandidateListUpdate(data: Candidates.Bulk) {
@@ -266,10 +331,21 @@ class InputBarDelegate(override val di: DI) :
     }
 
     private fun switchUiByState(state: QuickBarStateMachine.State) {
-        val index = state.ordinal
+        // The row's end slot follows the composition: expanding belongs to typing, stowing to the
+        // idle row. Set before the early return below, which only guards the animator's child.
+        monitorCandidateUi.setComposing(state == QuickBarStateMachine.State.Candidate)
+        val index =
+            when {
+                // The clipboard and inline-suggestion rows take the bar over while they last.
+                alwaysUi.currentState != AlwaysUi.State.Toolbar -> SUGGESTION_CHILD
+                state == QuickBarStateMachine.State.Tab -> TAB_CHILD
+                // Everything else -- idle and composing alike -- is the resident strip row.
+                else -> ROW_CHILD
+            }
         view.visibility =
             if (shouldShowInputBar(hideQuickBar, state)) View.VISIBLE else View.GONE
-        view.background = barBackground(state)
+        // The strip row paints its own screen; only the takeover rows want the bar's decor.
+        view.background = if (index == ROW_CHILD) null else barBackground()
         if (view.displayedChild == index) return
         val new = view.getChildAt(index)
         if (new != tabUi.root) {
@@ -282,7 +358,6 @@ class InputBarDelegate(override val di: DI) :
 
     /** Apply toolbar preferences without replacing the input view hierarchy. */
     fun onFloatingKeyboardChanged(isFloating: Boolean) {
-        blendCompactCandidatesIntoFloatingKeyboard = hideQuickBar && isFloating
         alwaysUi.floatingKeyboardButton.apply {
             setIcon(
                 if (isFloating) R.drawable.ic_baseline_keyboard_24 else R.drawable.ic_floating_keyboard_24,
@@ -298,6 +373,33 @@ class InputBarDelegate(override val di: DI) :
         switchUiByState(barStateMachine.currentState)
     }
 
+    /** Re-applies the composing strip's inset-bar background after its switch changed. */
+    fun refreshStripBackground() {
+        monitorCandidateUi.refreshStripBackground()
+    }
+
+    /** Re-applies the composing strip's length after its preference changed. */
+    fun refreshStripLength() {
+        monitorCandidateUi.refreshStripLength()
+    }
+
+    /** Shows or hides the strip row's two corner toggles after their switch changed. */
+    fun refreshCornerToggles() {
+        monitorCandidateUi.refreshCornerToggles()
+    }
+
+    /** Re-sizes the bar after the strip-to-keyboard gap changed; the strip keeps its own height. */
+    fun refreshStripGap() {
+        view.updateLayoutParams { height = context.dp(themedHeight) }
+        monitorCandidateUi.refreshStripGap()
+        service.requestInputInsetsUpdate()
+    }
+
+    /** Re-binds the candidate rows after the size of the candidates around the highlighted changed. */
+    fun refreshTwoRow() {
+        candidate.notifyTwoRowChanged()
+    }
+
     val view by lazy {
         ViewAnimator(context).apply {
             visibility =
@@ -306,12 +408,21 @@ class InputBarDelegate(override val di: DI) :
                 } else {
                     View.GONE
                 }
-            background = barBackground(QuickBarStateMachine.State.Always)
+            // Child order is the shell's private mapping, not the state ordinals: the resident
+            // strip row leads, the takeover row follows, the tab UI closes.
+            add(monitorCandidateUi.root, lParams(matchParent, matchParent))
             add(alwaysUi.root, lParams(matchParent, matchParent))
-            add(candidateUi.root, lParams(matchParent, matchParent))
             add(tabUi.root, lParams(matchParent, matchParent))
 
-            evalAlwaysUiState()
+            // Seeding must not go through evalAlwaysUiState: this lazy is mid-flight and the
+            // shell method reads `view`, which would re-enter the initializer. The child order
+            // is known, so a live takeover can be seeded by index instead.
+            val initial = desiredAlwaysUiState()
+            if (initial != AlwaysUi.State.Toolbar) {
+                alwaysUi.updateState(initial)
+                displayedChild = SUGGESTION_CHILD
+                background = barBackground()
+            }
             ClipboardHelper.addOnUpdateListener(onClipboardUpdateListener)
             // The helper keeps listeners in a static set, so it has to be
             // released when this view leaves the window -- otherwise it keeps
@@ -326,38 +437,53 @@ class InputBarDelegate(override val di: DI) :
                 },
             )
             syncToolbarOptionStates()
+            // The strip may be built while a private session is already up (an
+            // input view rebuild on a theme switch), so seed the badge here too.
+            syncPrivacyIndicator()
         }
     }
 
     /** Restyles the bar after a scheme switch without rebuilding its views. */
     fun refreshColors() {
-        view.background = barBackground(barStateMachine.currentState)
+        view.background = if (view.displayedChild == ROW_CHILD) null else barBackground()
         alwaysUi.refreshColors()
-        candidateUi.refreshColors()
-        // the compact candidate rows live inside candidateUi and re-bind via the delegate
+        monitorCandidateUi.refreshColors()
+        // the compact candidate rows live inside the panel and re-bind via the delegate
         candidate.refreshColors()
         tabUi.refreshColors()
     }
 
-    private fun barBackground(state: QuickBarStateMachine.State): Drawable? {
-        if (
-            blendCompactCandidatesIntoFloatingKeyboard &&
-            state == QuickBarStateMachine.State.Candidate
-        ) {
-            // Let the floating keyboard's themed background continue through the
-            // compact candidate row instead of drawing a separate, mismatched panel.
-            return null
-        }
-        return scope.decorDrawable(
+    /**
+     * The bar's own fill, for the rows that do not paint their own: the clipboard / inline
+     * takeover and the tab UI. The resident strip row fills itself with the composing screen --
+     * background, border and rounded corners -- and would otherwise composite twice.
+     */
+    private fun barBackground(): Drawable? =
+        scope.decorDrawable(
             "candidate_background",
             "candidate_border_color",
             context.dp(theme.generalStyle.candidateBorder),
             context.dp(theme.generalStyle.candidateBorderRound),
         )
-    }
 
     override fun onStartInput(info: EditorInfo) {
         evalAlwaysUiState()
+        syncPrivacyIndicator()
+    }
+
+    /**
+     * Mirrors the private-session state onto the status badge.
+     *
+     * [PrivacyMode] is the authority here rather than [EditorInfo] itself: the
+     * service decodes `imeOptions` in `onStartInput`, which always runs before
+     * the input view is told to start input, so by the time this is called the
+     * flag is already settled for the editor being typed into.
+     */
+    private fun syncPrivacyIndicator() {
+        alwaysUi.setPrivacyMode(PrivacyMode.isActive)
+        // The composing strip carries its own caption-row badge, so the state has to reach it too.
+        monitorCandidateUi.privacyButton.visibility =
+            if (PrivacyMode.isActive) View.VISIBLE else View.GONE
     }
 
     override fun onWindowAttached(window: BoardWindow) {
@@ -450,5 +576,12 @@ class InputBarDelegate(override val di: DI) :
 
     override fun onRimeOptionUpdated(value: RimeMessage.OptionMessage.Data) {
         alwaysUi.updateButtonsStyle(value.option, value.value)
+    }
+
+    private companion object {
+        /** Child slots of the bar's animator: the resident row, the takeover row, the tab UI. */
+        const val ROW_CHILD = 0
+        const val SUGGESTION_CHILD = 1
+        const val TAB_CHILD = 2
     }
 }

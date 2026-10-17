@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Manage the key press effects, such as vibration, sound, speaking and so on.
  */
 object InputFeedbackManager {
-    private val keyboardPrefs = AppPrefs.defaultInstance().keyboard
+    private val feedbackPrefs = AppPrefs.defaultInstance().feedback
 
     private var tts: TextToSpeech? = null
     private var soundPool: SoundPool? = null
@@ -93,9 +93,9 @@ object InputFeedbackManager {
         (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) &&
             vibrator.hasAmplitudeControl()
 
-    private val vibrateOnKeyPress by keyboardPrefs.vibrateOnKeyPress
-    private val vibrationDuration by keyboardPrefs.vibrationDuration
-    private val vibrationAmplitude by keyboardPrefs.vibrationAmplitude
+    private val vibrateOnKeyPress by feedbackPrefs.vibrateOnKeyPress
+    private val vibrationDuration by feedbackPrefs.vibrationDuration
+    private val vibrationAmplitude by feedbackPrefs.vibrationAmplitude
 
     /**
      * Makes a key press vibration if the user has this feature enabled in the preferences.
@@ -153,9 +153,9 @@ object InputFeedbackManager {
         }
     }
 
-    private val soundOnKeyPress by keyboardPrefs.soundOnKeyPress
-    private val soundEffectEnabled by keyboardPrefs.useCustomSoundEffect
-    private val soundVolume by keyboardPrefs.soundVolume
+    private val soundOnKeyPress by feedbackPrefs.soundOnKeyPress
+    private val soundEffectEnabled by feedbackPrefs.useCustomSoundEffect
+    private val soundVolume by feedbackPrefs.soundVolume
 
     /**
      * Makes a key press sound if the user has this feature enabled in the preferences.
@@ -189,8 +189,8 @@ object InputFeedbackManager {
         }
     }
 
-    private val speakOnKeyPress by keyboardPrefs.speakOnKeyPress
-    private val speakOnCommit by keyboardPrefs.speakOnCommit
+    private val speakOnKeyPress by feedbackPrefs.speakOnKeyPress
+    private val speakOnCommit by feedbackPrefs.speakOnCommit
 
     fun keyPressSpeak(keyCode: Int) {
         if (!speakOnKeyPress) return

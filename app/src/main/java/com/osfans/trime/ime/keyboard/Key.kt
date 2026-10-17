@@ -149,6 +149,23 @@ class Key(
 
     private fun <T> schemeColor(resolve: () -> T) = SchemeColorCache(resolve)
 
+    /**
+     * How far the text shadow bleeds, in dp, and what colour it is.
+     *
+     * `shadow_color` has sat in the colour-key list, and in this theme's schemes, for as long as the
+     * key colours have — but nothing ever read it, so a theme could set it and see nothing move.
+     * It pairs with `style.shadow_radius`; the two together are the whole of the setting.
+     *
+     * Both go through the colour-scheme cache, so a scheme switch re-resolves them, and the radius
+     * is read from the active theme rather than from the keyboard config because `shadow_radius` is
+     * a style value the theme owns, not something a single keyboard declares.
+     */
+    val textShadowRadiusDip: Float by schemeColor {
+        ColorManager.currentScope()?.theme?.generalStyle?.shadowRadius ?: 0f
+    }
+
+    val textShadowColor: Int by schemeColor { getColor("shadow_color", 0) }
+
     private val keyBackground by schemeColor { getDrawable({ keyBackColor }, "key_back_color") }
     private val offKeyBackground by schemeColor { ColorManager.getDrawable("off_key_back_color") ?: keyBackground }
     private val onKeyBackground by schemeColor { ColorManager.getDrawable("on_key_back_color") ?: keyBackground }
@@ -200,20 +217,32 @@ class Key(
     /**
      * Informs the key that it has been pressed, in case it needs to change its appearance or state.
      *
-     * @see .onReleased
+     * @see .releasePressed
      */
     fun onPressed() {
         isPressed = true
     }
 
     /**
-     * Changes the pressed state of the key. If it is a sticky key, it will also change the toggled
-     * state of the key if the finger was release inside.
+     * Drops the pressed look.
+     *
+     * Kept apart from [releaseSticky] because the two do not have to happen together any more: the
+     * keyboard can hold a key looking pressed for a moment after the finger lifts, while the state
+     * a release carries -- a sticky key toggling -- must happen at once, not when the highlight
+     * finally goes out.
      *
      * @see .onPressed
      */
-    fun onReleased() {
+    fun releasePressed() {
         isPressed = false
+    }
+
+    /**
+     * Applies the state a release carries: a sticky key toggles its on/off here.
+     *
+     * @see .releasePressed
+     */
+    fun releaseSticky() {
         if (click!!.isSticky) isOn = !isOn
     }
 

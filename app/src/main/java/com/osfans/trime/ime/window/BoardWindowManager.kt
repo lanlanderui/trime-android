@@ -28,6 +28,11 @@ class BoardWindowManager(override val di: DI) : DIAware {
 
     private val cachedResidentWindows = mutableMapOf<ResidentWindow.Key, Pair<BoardWindow, View?>>()
 
+    private companion object {
+        /** How long a window takes to come and go, unless it asks for its own timing. */
+        const val WINDOW_ANIMATION_MS = 100L
+    }
+
     private var currentWindow: BoardWindow? = null
     private var currentView: View? = null
 
@@ -44,7 +49,15 @@ class BoardWindowManager(override val di: DI) : DIAware {
             TransitionSet().apply {
                 enterAnimation?.let { addTransition(it) }
                 exitAnimation?.let { addTransition(it) }
-                duration = 100
+                // A window that asks for its own timing gets it; the rest keep the short default.
+                // The set's duration overrides its children, so it has to be read here rather
+                // than left to the transitions themselves.
+                duration = sequenceOf(enterAnimation, exitAnimation)
+                    .filterNotNull()
+                    .map { it.duration }
+                    .filter { it > 0 }
+                    .maxOrNull()
+                    ?: WINDOW_ANIMATION_MS
             },
         )
     }

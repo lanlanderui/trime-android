@@ -10,6 +10,7 @@ import android.content.Context
 import android.os.Build
 import androidx.annotation.Keep
 import androidx.room.withTransaction
+import com.osfans.trime.data.PrivacyMode
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.prefs.PreferenceDelegate
 import com.osfans.trime.util.WeakHashSet
@@ -196,6 +197,10 @@ object ClipboardHelper :
      * - [outputRules] 输出规则。如果剪贴板内容与规则匹配，则不通知剪贴板管理器。
      */
     override fun onPrimaryClipChanged() {
+        // A private session must not leave a trace: nothing copied while it is up
+        // goes into the history. The system clipboard itself is untouched -- only
+        // this app's copy of it.
+        if (PrivacyMode.isActive) return
         val clip = clipboardManager.primaryClip ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val timestamp = clip.description.timestamp

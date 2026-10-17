@@ -71,6 +71,9 @@ class SymbolHistory(
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > capacity
 
     fun insert(s: String) {
+        // A private session must not leave a trace: symbols tapped while it is up
+        // do not enter the recently-used list.
+        if (PrivacyMode.isActive) return
         if (load()) put(s, s)
     }
 

@@ -21,6 +21,7 @@ import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.core.CandidateProto
 import com.osfans.trime.core.Candidates
 import com.osfans.trime.data.theme.ThemeScope
+import com.osfans.trime.ime.keyboard.InputFeedbackManager
 import splitties.dimensions.dp
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.recyclerview.recyclerView
@@ -134,9 +135,11 @@ class PagedCandidatesUi(
 
                 else -> UiHolder.Pagination(PaginationUi(ctx, scope)).apply {
                     ui.prevIcon.setOnClickListener {
+                        InputFeedbackManager.keyPressVibrate(ui.prevIcon)
                         onPrevPage.invoke()
                     }
                     ui.nextIcon.setOnClickListener {
+                        InputFeedbackManager.keyPressVibrate(ui.nextIcon)
                         onNextPage.invoke()
                     }
                 }
@@ -154,6 +157,11 @@ class PagedCandidatesUi(
                     is UiHolder.Candidate -> {
                         val candidate = item ?: return
                         holder.ui.root.setOnClickListener {
+                            // The window floats outside the keyboard, so tapping it gave no
+                            // feedback at all while every key did. Same call the keyboard makes,
+                            // so the one preference governs both. The long press below already has
+                            // its own, raised where the action menu opens.
+                            InputFeedbackManager.keyPressVibrate(holder.ui.root)
                             onCandidateClick.invoke(position)
                         }
                         holder.ui.root.setOnLongClickListener { v ->

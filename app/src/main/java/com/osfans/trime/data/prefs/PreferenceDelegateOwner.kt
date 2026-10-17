@@ -8,7 +8,6 @@ package com.osfans.trime.data.prefs
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.annotation.StringRes
-import androidx.preference.PreferenceScreen
 
 abstract class PreferenceDelegateOwner(
     protected val sharedPreferences: SharedPreferences,
@@ -158,6 +157,27 @@ abstract class PreferenceDelegateOwner(
         return pref
     }
 
+    /**
+     * An ARGB colour edited through a dialog the settings side owns.
+     *
+     * The row is built here; the tap and the summary need the picker, which lives above this
+     * layer, so the hosting fragment finds the row by key and fills them in. Zero means
+     * "automatic" for every such row.
+     */
+    protected fun colorPick(
+        @StringRes
+        title: Int,
+        key: String,
+        defaultValue: Int,
+        enableUiOn: (() -> Boolean)? = null,
+    ): PreferenceDelegate<Int> {
+        val pref = PreferenceDelegate(sharedPreferences, key, defaultValue)
+        val ui = PreferenceDelegateUi.ColorPick(title, key, defaultValue, enableUiOn)
+        pref.register()
+        ui.registerUi()
+        return pref
+    }
+
     protected fun int(
         @StringRes
         title: Int,
@@ -192,16 +212,5 @@ abstract class PreferenceDelegateOwner(
         pref.register()
         ui.registerUi()
         return pref
-    }
-
-    override fun createUi(screen: PreferenceScreen) {
-        val ctx = screen.context
-        preferenceDelegatesUi.forEach {
-            screen.addPreference(
-                it.createUi(ctx).apply {
-                    isEnabled = it.isEnabled()
-                },
-            )
-        }
     }
 }

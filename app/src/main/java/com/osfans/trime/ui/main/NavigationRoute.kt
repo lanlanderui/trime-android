@@ -10,12 +10,16 @@ import androidx.navigation.NavController
 import androidx.navigation.createGraph
 import androidx.navigation.fragment.fragment
 import com.osfans.trime.R
-import com.osfans.trime.ui.main.settings.AdvancedSettingsFragment
+import com.osfans.trime.ui.main.settings.AppSystemFragment
 import com.osfans.trime.ui.main.settings.CandidatesSettingsFragment
 import com.osfans.trime.ui.main.settings.ClipboardSettingsFragment
+import com.osfans.trime.ui.main.settings.FeedbackSettingsFragment
 import com.osfans.trime.ui.main.settings.GeneralSettingsFragment
-import com.osfans.trime.ui.main.settings.KeyboardSettingsFragment
+import com.osfans.trime.ui.main.settings.GestureTimingFragment
+import com.osfans.trime.ui.main.settings.KeyboardLayoutFragment
+import com.osfans.trime.ui.main.settings.PreeditAppearanceSettingsFragment
 import com.osfans.trime.ui.main.settings.ProfileSettingsFragment
+import com.osfans.trime.ui.main.settings.ShortcutSettingsFragment
 import com.osfans.trime.ui.main.settings.schema.SchemaListFragment
 import com.osfans.trime.ui.main.settings.theme.ThemeSettingsFragment
 import com.osfans.trime.ui.main.settings.userdict.UserDictionaryFragment
@@ -43,6 +47,24 @@ sealed class NavigationRoute : Parcelable {
     @Serializable
     data object VirtualKeyboard : NavigationRoute()
 
+    /**
+     * Gestures and timings, split out of the keyboard's layout page.
+     *
+     * Deliberately its own route rather than a tab inside [VirtualKeyboard]: the IME's "键盘" action
+     * deep-links to the layout page, and that page should open on what it is named for.
+     */
+    @Serializable
+    data object GestureTiming : NavigationRoute()
+
+    @Serializable
+    data object PreeditAppearance : NavigationRoute()
+
+    @Serializable
+    data object Feedback : NavigationRoute()
+
+    @Serializable
+    data object Shortcut : NavigationRoute()
+
     @Serializable
     data object CandidatesWindow : NavigationRoute()
 
@@ -53,7 +75,7 @@ sealed class NavigationRoute : Parcelable {
     data object Clipboard : NavigationRoute()
 
     @Serializable
-    data object Advanced : NavigationRoute()
+    data object AppSystem : NavigationRoute()
 
     @Serializable
     data object Developer : NavigationRoute()
@@ -83,22 +105,34 @@ sealed class NavigationRoute : Parcelable {
             }
 
             fragment<GeneralSettingsFragment, General> {
-                label = ctx.getString(R.string.general)
+                label = ctx.getString(R.string.section_input_behavior)
             }
-            fragment<KeyboardSettingsFragment, VirtualKeyboard> {
-                label = ctx.getString(R.string.virtual_keyboard)
+            fragment<KeyboardLayoutFragment, VirtualKeyboard> {
+                label = ctx.getString(R.string.page_keyboard_layout)
+            }
+            fragment<GestureTimingFragment, GestureTiming> {
+                label = ctx.getString(R.string.section_gesture_timing)
+            }
+            fragment<PreeditAppearanceSettingsFragment, PreeditAppearance> {
+                label = ctx.getString(R.string.page_preedit)
+            }
+            fragment<FeedbackSettingsFragment, Feedback> {
+                label = ctx.getString(R.string.feedback)
+            }
+            fragment<ShortcutSettingsFragment, Shortcut> {
+                label = ctx.getString(R.string.shortcut)
             }
             fragment<CandidatesSettingsFragment, CandidatesWindow> {
-                label = ctx.getString(R.string.candidates_window)
+                label = ctx.getString(R.string.page_candidate_area)
             }
             fragment<ThemeSettingsFragment, Theme> {
-                label = ctx.getString(R.string.theme)
+                label = ctx.getString(R.string.section_theme_colors)
             }
             fragment<ClipboardSettingsFragment, Clipboard> {
                 label = ctx.getString(R.string.clipboard)
             }
-            fragment<AdvancedSettingsFragment, Advanced> {
-                label = ctx.getString(R.string.advanced)
+            fragment<AppSystemFragment, AppSystem> {
+                label = ctx.getString(R.string.page_app_system)
             }
             fragment<DeveloperFragment, Developer> {
                 label = ctx.getString(R.string.developer)

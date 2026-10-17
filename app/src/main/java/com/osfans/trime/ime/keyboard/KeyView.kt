@@ -49,6 +49,16 @@ class KeyView(
     private var keyPressed = false
     override fun isPressed(): Boolean = keyPressed
 
+    /**
+     * Whether this touch already went through its release.
+     *
+     * A gesture can report the release twice -- a long press ends the press and the finger then
+     * lifts -- and a sticky key must not toggle twice for one tap.
+     */
+    private var releaseHandled = false
+
+    private val keyboardPrefs = AppPrefs.defaultInstance().keyboard
+
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
     }
@@ -184,16 +194,29 @@ class KeyView(
         }
     }
 
+    /**
+     * Turns the pressed look on or off.
+     *
+     * The look goes out with the touch -- it is feedback for *this* press, and holding it up after
+     * the finger has left only puts the keyboard a beat behind the typing.
+     */
     fun setPressedState(pressed: Boolean) {
-        if (keyPressed != pressed) {
-            keyPressed = pressed
-            if (pressed) {
-                key.onPressed()
-            } else {
-                key.onReleased()
-            }
+        if (pressed) {
+            releaseHandled = false
+            if (keyPressed) return
+            keyPressed = true
+            key.onPressed()
             invalidate()
+            return
         }
+        if (!keyPressed) return
+        if (!releaseHandled) {
+            releaseHandled = true
+            key.releaseSticky()
+        }
+        keyPressed = false
+        key.releasePressed()
+        invalidate()
     }
 
     private fun processKeyAction(action: KeyAction, behavior: KeyBehavior) {
@@ -311,6 +334,25 @@ class KeyView(
         bg.draw(canvas)
     }
 
+    /**
+     * Puts the theme's text shadow on [paint], or takes any shadow off it.
+     *
+     * Applied per draw rather than once when the paint is built, because the colour comes from the
+     * active colour scheme — a scheme switch has to be able to take the shadow away again, and a
+     * paint keeps whatever shadow it was last given.
+     *
+     * Icon-font glyphs are left out: they are drawn as an [IconicsDrawable], which carries a colour
+     * filter instead of a paint.
+     */
+    private fun applyTextShadow(paint: Paint) {
+        val shadow = KeyTextShadow.of(radiusPx = dp(key.textShadowRadiusDip), color = key.textShadowColor)
+        if (shadow == null) {
+            paint.clearShadowLayer()
+        } else {
+            paint.setShadowLayer(shadow.radiusPx, shadow.dxPx, shadow.dyPx, shadow.color)
+        }
+    }
+
     private fun drawLabel(canvas: Canvas, label: String) {
         val textColor = key.getTextColor()
         val textSize = sp(key.keyTextSize.takeIf { it > 0 } ?: if (label.length > 1 && !label.isIconFont) keyboardView.keyLongTextSize else keyboardView.keyTextSize)
@@ -322,7 +364,7 @@ class KeyView(
                 color = textColor
                 this.textSize = textSize
                 typeface = FontManager.getTypeface("key_font")
-                clearShadowLayer()
+                applyTextShadow(this)
             }
 
             val centerX = (width - paddingLeft - paddingRight) / 2f + paddingLeft
@@ -406,6 +448,7 @@ class KeyView(
                 color = textColor
                 this.textSize = textSize
                 typeface = FontManager.getTypeface("symbol_font")
+                applyTextShadow(this)
             }
 
             val lines = symbolLinesOf(text)

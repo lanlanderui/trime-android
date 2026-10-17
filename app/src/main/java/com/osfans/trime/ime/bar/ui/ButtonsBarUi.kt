@@ -6,6 +6,7 @@
 package com.osfans.trime.ime.bar.ui
 
 import android.content.Context
+import android.view.View
 import androidx.annotation.DrawableRes
 import androidx.core.view.children
 import com.google.android.flexbox.AlignItems
@@ -28,13 +29,25 @@ class ButtonsBarUi(
 
     override val root = view(::FlexboxLayout) {
         alignItems = AlignItems.CENTER
-        justifyContent = JustifyContent.FLEX_START
+        // The switches share the strip evenly rather than packing to one end.
+        justifyContent = JustifyContent.SPACE_EVENLY
         flexDirection = FlexDirection.ROW_REVERSE
     }
 
     val firstButton: ToolButton?
 
     private val defaultButtonSize = theme.generalStyle.run { candidateViewHeight + commentHeight }
+
+    /** Adds a control to the evenly spaced row, sized like the theme's own buttons. */
+    fun addButton(view: View, config: ToolBar.Button?) {
+        val (width, height) = getButtonSize(config)
+        root.addView(
+            view,
+            FlexboxLayout.LayoutParams(width, height).apply {
+                marginEnd = ctx.dp(theme.toolBar.buttonSpacing)
+            },
+        )
+    }
 
     private fun toolButton(
         buttonConfig: ToolBar.Button?,
@@ -58,15 +71,14 @@ class ButtonsBarUi(
 
     init {
         val buttons = theme.toolBar.buttons
-        firstButton = buttons.firstOrNull()?.let { toolButton(it) }
+        // The whole set rides the row: the first button used to sit apart as an alternate face of
+        // the hide button, but the hide button's own spot is gone, so nothing holds it back.
+        firstButton = buttons.firstOrNull()?.let { config ->
+            toolButton(config).also { addButton(it, config) }
+        }
 
         buttons.drop(1).forEach { config ->
-            val button = toolButton(config)
-            val size = getButtonSize(config)
-            val lParams = FlexboxLayout.LayoutParams(size.first, size.second).apply {
-                marginEnd = ctx.dp(theme.toolBar.buttonSpacing)
-            }
-            root.addView(button, lParams)
+            addButton(toolButton(config), config)
         }
     }
 

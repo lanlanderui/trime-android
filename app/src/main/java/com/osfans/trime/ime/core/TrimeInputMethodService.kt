@@ -43,6 +43,8 @@ import com.osfans.trime.core.RimeKeyMapping
 import com.osfans.trime.core.RimeMessage
 import com.osfans.trime.daemon.RimeDaemon
 import com.osfans.trime.daemon.RimeSession
+import com.osfans.trime.data.PrivacyMode
+import com.osfans.trime.data.isPrivacyModeRequested
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.prefs.PreferenceDelegate
 import com.osfans.trime.data.prefs.PreferenceDelegateProvider
@@ -67,6 +69,32 @@ import splitties.bitflags.hasFlag
 import splitties.systemservices.clipboardManager
 import splitties.systemservices.inputMethodManager
 import timber.log.Timber
+
+/**
+ * The height of the space the candidate window places itself in, in window coordinates.
+ *
+ * While the keyboard sits in its usual place at the bottom of the window, that space stops at the
+ * keyboard's top edge — [keyboardTopInWindow] — which is what keeps the candidate window off the
+ * keys. A floating keyboard has no such edge: it sits over the editor, and the window is kept clear
+ * of it through the obstruction instead, so the space is the window's whole height.
+ *
+ * [keyboardTopInWindow] is only meaningful in the first case. `onComputeInsets` fills it while the
+ * keyboard is docked and leaves it alone while the keyboard floats, so reading it in the floating
+ * case returns a stale zero — which is exactly what happened: the height came out as zero,
+ * `CandidatesView.updatePosition` stopped at its "no parent size" guard, and every placement,
+ * follow-the-cursor included, left the window at (0,0).
+ */
+internal fun candidateSpaceHeight(
+    useVirtualKeyboard: Boolean,
+    floating: Boolean,
+    keyboardTopInWindow: Int,
+    windowHeight: Int,
+): Float =
+    if (useVirtualKeyboard && !floating) {
+        keyboardTopInWindow.toFloat()
+    } else {
+        windowHeight.toFloat()
+    }
 
 /** [輸入法][InputMethodService]主程序  */
 
@@ -103,19 +131,15 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         prefs.keyboard.floatingKeyboard,
         prefs.keyboard.floatingKeyboardWidth,
         prefs.keyboard.floatingKeyboardHeight,
-        prefs.keyboard.floatingPreeditOffsetX,
-        prefs.keyboard.floatingPreeditOffsetY,
+        prefs.keyboard.preeditOffsetPercent,
+        prefs.keyboard.preeditKeyboardGap,
+        prefs.preeditAppearance.cornerRadius,
+        prefs.preeditAppearance.backColor,
+        prefs.preeditAppearance.backOpacity,
         prefs.keyboard.expandKeypressArea,
         prefs.keyboard.hideKeySymbol,
         prefs.keyboard.hideKeyHint,
         prefs.keyboard.hideInputBar,
-        prefs.keyboard.bottomToggleMargin,
-        // This array is what subscribes the listener below, and its own branch handles these two
-        // in place, so they belong here even though no rebuild is wanted: a preference that is not
-        // listed is a preference whose change is never seen until the view is built again.
-        prefs.keyboard.bottomBarEnabled,
-        prefs.keyboard.bottomBarHeight,
-        prefs.keyboard.bottomBarHeightLandscape,
         prefs.advanced.ignoreSystemGestureInsets,
     )
 
@@ -141,14 +165,18 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
                     }
                 }
 
-                // Only the margins of the bottom row move, so no rebuild is needed.
-                AppPrefs.Keyboard.BOTTOM_TOGGLE_MARGIN -> inputView?.refreshBottomHandleMargin()
+                // The preedit only moves; a rebuild would flash the whole keyboard for a slide.
+                AppPrefs.Keyboard.FLOATING_PREEDIT_OFFSET_X -> inputView?.refreshPreeditPosition()
 
-                // The bottom bar only changes the strip's height and colour, so the view tree
-                // stays as it is; only the IME window's insets have to be recomputed.
-                AppPrefs.Keyboard.BOTTOM_BAR_ENABLED,
-                AppPrefs.Keyboard.BOTTOM_BAR_HEIGHT,
-                AppPrefs.Keyboard.BOTTOM_BAR_HEIGHT_LANDSCAPE -> inputView?.refreshBottomBar()
+                // Same for the clearance above the keys: the constraint is re-parameterised in
+                // place, so the keyboard never leaves the screen while the value is adjusted.
+                AppPrefs.Keyboard.PREEDIT_KEYBOARD_GAP -> inputView?.refreshPreeditGap()
+
+                // The chip's corners and fill are drawn from these three; only its background
+                // drawable is replaced, so a slide in the dialog redraws instead of rebuilding.
+                AppPrefs.PreeditAppearance.CORNER_RADIUS,
+                AppPrefs.PreeditAppearance.BACK_COLOR,
+                AppPrefs.PreeditAppearance.BACK_OPACITY -> inputView?.refreshPreeditAppearance()
 
                 else -> themeScope?.let { replaceInputView(it) }
             }
@@ -176,16 +204,35 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
     private val recreateCandidatesViewListener =
         PreferenceDelegateProvider.OnChangeListener { key ->
             themeScope?.let { replaceCandidateView(it) }
-            // The bottom toggle mirrors the mode, so it has to follow a change made in Settings.
-            if (key == AppPrefs.Candidates.MODE) {
-                inputView?.refreshCandidatesWindowToggle()
+            // The composing strip lives in the input bar, not in the popup candidates view.
+            if (key == AppPrefs.Candidates.STRIP_BACKGROUND) {
+                inputView?.refreshStripBackground()
+            }
+            if (key == AppPrefs.Candidates.STRIP_COLOR) {
+                inputView?.refreshStripBackground()
+            }
+            if (key == AppPrefs.Candidates.STRIP_OPACITY) {
+                inputView?.refreshStripBackground()
+            }
+            if (key == AppPrefs.Candidates.STRIP_LENGTH) {
+                inputView?.refreshStripLength()
+            }
+            if (key == AppPrefs.Candidates.STRIP_GAP) {
+                inputView?.refreshStripGap()
+            }
+            if (key == AppPrefs.Candidates.TWO_ROW_FONT) {
+                inputView?.refreshTwoRow()
+            }
+            // Hiding the two corner toggles only changes what the strip row shows.
+            if (key == AppPrefs.Candidates.CORNER_TOGGLES_COMPOSING) {
+                inputView?.refreshCornerToggles()
             }
         }
 
     /** Prefs that only resize the popup candidate window's row, so no rebuild is needed. */
     private val refreshCandidatesRowPrefs: Array<PreferenceDelegate<*>> = arrayOf(
-        prefs.keyboard.maxSpanCount,
-        prefs.keyboard.maxSpanCountLandscape,
+        prefs.candidates.maxSpanCount,
+        prefs.candidates.maxSpanCountLandscape,
     )
 
     @Keep
@@ -198,6 +245,16 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
     private val onThemeChangeListener =
         ThemeManager.OnThemeChangeListener {
             themeScope?.let { replaceInputViews(it) }
+        }
+
+    @Keep
+    private val onRebuildListener =
+        ColorManager.OnRebuildListener {
+            ContextCompat.getMainExecutor(this).execute {
+                // An explicit "apply" from the settings screen: rebuild rather than restyle, so
+                // nothing can be left over from the previous attempt.
+                themeScope?.let { replaceInputViews(it) }
+            }
         }
 
     @Keep
@@ -236,6 +293,10 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
     private suspend fun updateRimeOption(api: RimeApi) {
         try {
             api.setRuntimeOption("soft_cursor", prefs.keyboard.useSoftCursor.getValue()) // 軟光標
+            // Re-assert the private-session request here too: it belongs to the
+            // editor being typed into, while the native session may have been torn
+            // down and rebuilt (deploy, config reload) since `onStartInput` set it.
+            api.setRuntimeOption(PrivacyMode.RIME_OPTION, PrivacyMode.isActive)
         } catch (e: Exception) {
             Timber.e(e)
         }
@@ -282,6 +343,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
                 if (destroyed) return@runOnReady
                 ThemeManager.addOnChangedListener(onThemeChangeListener)
                 ColorManager.addOnChangedListener(onColorChangeListener)
+                ColorManager.addOnRebuildRequestedListener(onRebuildListener)
             }
         }
         InputFeedbackManager.init(this)
@@ -470,6 +532,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         }
         ThemeManager.removeOnChangedListener(onThemeChangeListener)
         ColorManager.removeOnChangedListener(onColorChangeListener)
+        ColorManager.removeOnRebuildRequestedListener(onRebuildListener)
         super.onDestroy()
         unregisterReceiver(rimeIntentReceiver)
         RimeDaemon.destroySession(javaClass.name)
@@ -519,13 +582,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
     private var decorLocationUpdated = false
 
     private fun updateDecorLocation() {
-        contentSize[0] = contentView.width.toFloat()
-        contentSize[1] =
-            if (inputDeviceManager.useVirtualKeyboard) {
-                inputViewLocation[1].toFloat()
-            } else {
-                contentView.height.toFloat()
-            }
+        updateContentSize()
         decorView.getLocationOnScreen(decorLocationInt)
         decorLocation[0] = decorLocationInt[0].toFloat()
         decorLocation[1] = decorLocationInt[1].toFloat()
@@ -534,6 +591,35 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         if (contentSize[0] > 0 && contentSize[1] > 0) {
             decorLocationUpdated = true
         }
+    }
+
+    /** Whether the keyboard is currently floating somewhere over the editor. */
+    private fun keyboardIsFloating(): Boolean = inputView?.isFloatingKeyboardEnabled == true
+
+    /**
+     * The coordinate space the candidate window places itself in.
+     *
+     * Width is the window's, always. The height is what the window measures its bottom limit
+     * against, and it is the keyboard's top edge only while the keyboard occupies its usual place
+     * at the bottom: that is the edge a candidate window should stop at, and it is why the window
+     * never lands on the keys. A floating keyboard has no such edge — it sits somewhere over the
+     * editor — and the window is kept clear of it through the obstruction instead, so the space is
+     * the window's whole height.
+     *
+     * The floating case used to read `inputViewLocation` as well, but `onComputeInsets` only fills
+     * that while the keyboard is *not* floating. It kept its initial zero, the height came out as
+     * zero, and `CandidatesView.updatePosition` stopped at its "no parent size" guard: every
+     * placement, follow-the-cursor included, left the window at (0,0).
+     */
+    private fun updateContentSize() {
+        contentSize[0] = contentView.width.toFloat()
+        contentSize[1] =
+            candidateSpaceHeight(
+                useVirtualKeyboard = inputDeviceManager.useVirtualKeyboard,
+                floating = keyboardIsFloating(),
+                keyboardTopInWindow = inputViewLocation[1],
+                windowHeight = contentView.height,
+            )
     }
 
     private val anchorPosition = RectF()
@@ -660,6 +746,12 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         // This callback is the framework's, and InputView only asks for another round when the
         // floating keyboard's bounds actually changed, so it doubles as the signal that the
         // candidate window has to be re-placed relative to the keyboard.
+        //
+        // The space is refreshed here as well as in `updateDecorLocation`, because that one runs
+        // once per input session: a keyboard that starts floating or stops floating mid-session
+        // changes which edge the window should measure against, and this is the callback that
+        // runs when it does.
+        updateContentSize()
         syncCandidatesObstruction()
     }
 
@@ -707,12 +799,20 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         composingText = ""
         Timber.d("onStartInput: restarting=$restarting")
         val isNullType = attribute.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_NULL
+        // `onStartInput` always fires before the input view is shown, so this is
+        // the earliest point where a private session can be recognized -- and it
+        // has to be before the first keystroke reaches librime.
+        val privacyMode = isPrivacyModeRequested(attribute.imeOptions)
+        if (PrivacyMode.setActive(privacyMode)) {
+            Timber.i("Private session: $privacyMode")
+        }
         postRimeJob {
             if (restarting) {
                 // when input restarts in the same editor, clear previous composition
                 clearComposition()
             }
             setNullInputType(isNullType)
+            setRuntimeOption(PrivacyMode.RIME_OPTION, privacyMode)
         }
     }
 
@@ -746,7 +846,9 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
             inputView?.startInput(attribute, restarting)
         }
         if (useCandidatesView) {
-            if (currentInputConnection?.monitorCursorAnchor() != true) {
+            val monitoring = currentInputConnection?.monitorCursorAnchor()
+            Timber.d("startInputView: candidatesView in use, cursor monitoring = %s", monitoring)
+            if (monitoring != true) {
                 if (!decorLocationUpdated) {
                     updateDecorLocation()
                 }
@@ -1002,7 +1104,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (prefs.keyboard.hookCtrlZY.getValue()) {
+            if (prefs.shortcut.hookCtrlZY.getValue()) {
                 when (code) {
                     KeyEvent.KEYCODE_Y -> return ic.performContextMenuAction(android.R.id.redo)
                     KeyEvent.KEYCODE_Z -> return ic.performContextMenuAction(android.R.id.undo)
@@ -1013,7 +1115,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         when (code) {
             KeyEvent.KEYCODE_A -> {
                 // 全选
-                return if (prefs.keyboard.hookCtrlA.getValue()) {
+                return if (prefs.shortcut.hookCtrlA.getValue()) {
                     ic.performContextMenuAction(android.R.id.selectAll)
                 } else {
                     false
@@ -1022,7 +1124,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
 
             KeyEvent.KEYCODE_X -> {
                 // 剪切
-                if (prefs.keyboard.hookCtrlCV.getValue()) {
+                if (prefs.shortcut.hookCtrlCV.getValue()) {
                     val etr = ExtractedTextRequest()
                     etr.token = 0
                     val et = ic.getExtractedText(etr, 0)
@@ -1036,7 +1138,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
 
             KeyEvent.KEYCODE_C -> {
                 // 复制
-                if (prefs.keyboard.hookCtrlCV.getValue()) {
+                if (prefs.shortcut.hookCtrlCV.getValue()) {
                     val etr = ExtractedTextRequest()
                     etr.token = 0
                     val et = ic.getExtractedText(etr, 0)
@@ -1057,7 +1159,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
 
             KeyEvent.KEYCODE_V -> {
                 // 粘贴
-                if (prefs.keyboard.hookCtrlCV.getValue()) {
+                if (prefs.shortcut.hookCtrlCV.getValue()) {
                     val etr = ExtractedTextRequest()
                     etr.token = 0
                     val et = ic.getExtractedText(etr, 0)
@@ -1076,7 +1178,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
             }
 
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (prefs.keyboard.hookCtrlLR.getValue()) {
+                if (prefs.shortcut.hookCtrlLR.getValue()) {
                     val etr = ExtractedTextRequest()
                     etr.token = 0
                     val et = ic.getExtractedText(etr, 0)
@@ -1089,7 +1191,7 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
             }
 
             KeyEvent.KEYCODE_DPAD_LEFT ->
-                if (prefs.keyboard.hookCtrlLR.getValue()) {
+                if (prefs.shortcut.hookCtrlLR.getValue()) {
                     val etr = ExtractedTextRequest()
                     etr.token = 0
                     val et = ic.getExtractedText(etr, 0)

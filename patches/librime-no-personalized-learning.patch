@@ -1,0 +1,106 @@
+diff --git a/src/rime/gear/memory.cc b/src/rime/gear/memory.cc
+index 9da80fa..f21a969 100644
+--- a/src/rime/gear/memory.cc
++++ b/src/rime/gear/memory.cc
+@@ -19,6 +19,17 @@
+ 
+ namespace rime {
+ 
++namespace {
++
++// Whether the front-end asked this session not to learn from what is typed.
++// A null context means the memory is not attached to an engine, which then has
++// no user dictionary to protect either.
++bool no_personalized_learning(Context* ctx) {
++  return ctx && ctx->get_option(kNoPersonalizedLearningOption);
++}
++
++}  // namespace
++
+ void CommitEntry::Clear() {
+   text.clear();
+   code.clear();
+@@ -126,7 +137,8 @@ bool Memory::ProcessSegmentOnCommit(CommitEntry& commit_entry,
+ }
+ 
+ void Memory::OnCommit(Context* ctx) {
+-  if (!user_dict_ || user_dict_->readonly())
++  // Private sessions must not leave a trace in the user dictionary.
++  if (!user_dict_ || user_dict_->readonly() || no_personalized_learning(ctx))
+     return;
+   StartSession();
+   CommitEntry commit_entry(this);
+@@ -136,7 +148,8 @@ void Memory::OnCommit(Context* ctx) {
+ }
+ 
+ void Memory::OnDeleteEntry(Context* ctx) {
+-  if (!user_dict_ || user_dict_->readonly() || !ctx || !ctx->HasMenu())
++  if (!user_dict_ || user_dict_->readonly() || no_personalized_learning(ctx) ||
++      !ctx || !ctx->HasMenu())
+     return;
+   auto phrase =
+       As<Phrase>(Candidate::GetGenuineCandidate(ctx->GetSelectedCandidate()));
+@@ -149,7 +162,9 @@ void Memory::OnDeleteEntry(Context* ctx) {
+ }
+ 
+ void Memory::OnUnhandledKey(Context* ctx, const KeyEvent& key) {
+-  if (!user_dict_ || user_dict_->readonly())
++  // Backspace reverts the pending user-dictionary transaction, which is still a
++  // write; a private session has none to revert and must not start one.
++  if (!user_dict_ || user_dict_->readonly() || no_personalized_learning(ctx))
+     return;
+   if ((key.modifier() & ~kShiftMask) == 0) {
+     if (key.keycode() == XK_BackSpace && DiscardSession()) {
+diff --git a/src/rime/gear/memory.h b/src/rime/gear/memory.h
+index 8b9612e..f227ea3 100644
+--- a/src/rime/gear/memory.h
++++ b/src/rime/gear/memory.h
+@@ -12,6 +12,14 @@
+ 
+ namespace rime {
+ 
++// Runtime switch a front-end can turn on to suspend personalized learning for
++// the current session: nothing is written to the user dictionary, and the user
++// dictionary is not consulted for candidates either. Android's
++// IME_FLAG_NO_PERSONALIZED_LEARNING -- raised by browsers in private/incognito
++// mode -- is what drives it. Nothing inside librime sets it, so an unset option
++// leaves the stock behaviour untouched.
++constexpr const char* kNoPersonalizedLearningOption = "_no_personalized_learning";
++
+ class KeyEvent;
+ class Context;
+ class Engine;
+diff --git a/src/rime/gear/script_translator.cc b/src/rime/gear/script_translator.cc
+index aef6217..cf9b770 100644
+--- a/src/rime/gear/script_translator.cc
++++ b/src/rime/gear/script_translator.cc
+@@ -215,8 +215,11 @@ an<Translation> ScriptTranslator::Query(const string& input,
+ 
+   FinishSession();
+ 
++  // A private session neither learns nor reads back what earlier sessions
++  // learned, so previously memorized phrases never surface as candidates.
+   bool enable_user_dict =
+-      user_dict_ && user_dict_->loaded() && !IsUserDictDisabledFor(input);
++      user_dict_ && user_dict_->loaded() && !IsUserDictDisabledFor(input) &&
++      !engine_->context()->get_option(kNoPersonalizedLearningOption);
+ 
+   size_t end_of_input = engine_->context()->input().length();
+   // the translator should survive translations it creates
+diff --git a/src/rime/gear/table_translator.cc b/src/rime/gear/table_translator.cc
+index 67bc229..b4f3e1f 100644
+--- a/src/rime/gear/table_translator.cc
++++ b/src/rime/gear/table_translator.cc
+@@ -250,8 +250,11 @@ an<Translation> TableTranslator::Query(const string& input,
+ 
+   FinishSession();
+ 
++  // A private session neither learns nor reads back what earlier sessions
++  // learned, so previously memorized phrases never surface as candidates.
+   bool enable_user_dict =
+-      user_dict_ && user_dict_->loaded() && !IsUserDictDisabledFor(input);
++      user_dict_ && user_dict_->loaded() && !IsUserDictDisabledFor(input) &&
++      !engine_->context()->get_option(kNoPersonalizedLearningOption);
+ 
+   const string& preedit(input);
+   string code = input;

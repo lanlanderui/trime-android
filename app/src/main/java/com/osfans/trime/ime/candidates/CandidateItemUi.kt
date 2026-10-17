@@ -11,6 +11,7 @@ import android.graphics.Color
 import android.view.View
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.isVisible
+import androidx.core.view.updateLayoutParams
 import com.osfans.trime.core.CandidateProto
 import com.osfans.trime.data.theme.FontManager
 import com.osfans.trime.data.theme.Theme
@@ -180,5 +181,26 @@ class CandidateItemUi(
         comment.text = commentText
         comment.setTextColor(cColor)
         comment.isVisible = commentText.isNotEmpty()
+    }
+
+    /**
+     * Scales the whole item for the two-row strip's second line, where the candidates are drawn
+     * smaller than the one above them. 1f is the theme's own size; the font, the comment and the
+     * item's own height all follow the same factor, so a short row stays coherent.
+     *
+     * Always applied on bind rather than only when the factor is not 1f: a row bound at 0.75 and
+     * then handed back to full size has to come up to it again.
+     */
+    fun applyScale(scale: Float) {
+        text.textSize = textSize * scale
+        comment.textSize = commentSize * scale
+        // The content's parent is the item's own frame, so its params are the frame's, not the
+        // ConstraintLayout params its *children* carry.
+        content.updateLayoutParams {
+            height = ctx.dp((theme.generalStyle.candidateViewHeight * scale).toInt())
+        }
+        // The content lays its own children out again, since their constraints do not change
+        // when the frame does.
+        content.requestLayout()
     }
 }

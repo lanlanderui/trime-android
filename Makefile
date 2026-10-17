@@ -49,6 +49,7 @@ style-apply: spotlessApply clang-format
 
 patch-apply:
 	-git apply --directory=$(jniDir)/librime-lua-deps patches/lua.patch
+	-git apply --directory=$(jniDir)/librime patches/librime-no-personalized-learning.patch
 
 debug: patch-apply
 	$(GRADLEW) :app:assembleDebug

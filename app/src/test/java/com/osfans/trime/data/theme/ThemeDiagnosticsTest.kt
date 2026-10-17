@@ -417,6 +417,91 @@ class ThemeDiagnosticsTest :
                     "Theme: My Theme (mytheme)\n" +
                     "Static checks could not run for this theme.\n"
             }
+
+            Then("live findings come first, before the file's own findings") {
+                val live =
+                    listOf(
+                        ThemeDiagnostics.Finding(
+                            Severity.INFO,
+                            Code.SHADOWED_BY_BUILTIN,
+                            "'round_corner' is overridden by the built-in size settings",
+                            "style/round_corner",
+                        ),
+                    )
+                ThemeDiagnostics.format("mytheme", "My Theme", emptyList(), live) shouldBe
+                    "Theme: My Theme (mytheme)\n" +
+                    "Live findings: 1\n" +
+                    "[INFO] style/round_corner: 'round_corner' is overridden by the built-in size settings " +
+                    "(SHADOWED_BY_BUILTIN)\n" +
+                    "No findings.\n"
+            }
+        }
+
+        Given("built-in overrides that are in charge") {
+            val themeStyle = GeneralStyle(roundCorner = 12f, keyboardHeight = 250, verticalGap = 1)
+
+            fun inEffect(
+                styleOverrides: Map<String, Float> = emptyMap(),
+                styleInCharge: Boolean = true,
+                layoutOverrides: Map<String, Float> = emptyMap(),
+                layoutInCharge: Boolean = true,
+            ) = ThemeDiagnostics.builtinOverridesInEffect(
+                styleOverrides = styleOverrides,
+                styleInCharge = styleInCharge,
+                layoutOverrides = layoutOverrides,
+                layoutInCharge = layoutInCharge,
+                themeStyle = themeStyle,
+            )
+
+            Then("each stored size is reported with both values, at its theme key") {
+                val findings = inEffect(styleOverrides = mapOf("round_corner" to 6f, "shadow_radius" to 21f))
+                findings.map { it.path } shouldBe listOf("style/round_corner", "style/shadow_radius")
+                findings.map { it.code } shouldBe
+                    listOf(Code.SHADOWED_BY_BUILTIN, Code.SHADOWED_BY_BUILTIN)
+                findings.forEach { it.severity shouldBe Severity.INFO }
+                findings.first().message shouldBe
+                    "'round_corner' is overridden by the built-in size settings (theme 12 → built-in 6); " +
+                    "theme edits have no effect while the size source is the built-in one"
+            }
+
+            Then("stored layout knobs come after the sizes, naming the layout source") {
+                val findings =
+                    inEffect(
+                        styleOverrides = mapOf("round_corner" to 6f),
+                        layoutOverrides = mapOf("keyboard_height" to 300f, "vertical_gap" to 8f),
+                    )
+                findings.map { it.path } shouldBe
+                    listOf("style/round_corner", "style/keyboard_height", "style/vertical_gap")
+                findings.last().message shouldBe
+                    "'vertical_gap' is overridden by the built-in layout settings (theme 1 → built-in 8); " +
+                    "theme edits have no effect while the layout source is the built-in one"
+            }
+
+            Then("a fractional override keeps its fraction") {
+                inEffect(styleOverrides = mapOf("round_corner" to 5.5f))
+                    .single()
+                    .message shouldContain "built-in 5.5"
+            }
+
+            Then("a domain whose source is the theme contributes nothing") {
+                inEffect(
+                    styleOverrides = mapOf("round_corner" to 6f),
+                    styleInCharge = false,
+                    layoutOverrides = mapOf("keyboard_height" to 300f),
+                    layoutInCharge = false,
+                ) shouldBe emptyList()
+            }
+
+            Then("no stored knobs means nothing to report") {
+                inEffect() shouldBe emptyList()
+            }
+
+            Then("a stored key this build does not know is skipped") {
+                inEffect(
+                    styleOverrides = mapOf("no_such_size" to 1f),
+                    layoutOverrides = mapOf("no_such_layout" to 1f),
+                ) shouldBe emptyList()
+            }
         }
 
         Given("the shipped themes") {

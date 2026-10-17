@@ -91,10 +91,10 @@ class KeyAction(
 
     // Resolved on first read, since the preference store needs the app context.
     private val hookShiftNum: Boolean by LazyPreferenceDelegate {
-        AppPrefs.defaultInstance().keyboard.hookShiftNum
+        AppPrefs.defaultInstance().shortcut.hookShiftNum
     }
     private val hookShiftSymbol: Boolean by LazyPreferenceDelegate {
-        AppPrefs.defaultInstance().keyboard.hookShiftSymbol
+        AppPrefs.defaultInstance().shortcut.hookShiftSymbol
     }
 
     private val rime get() = RimeDaemon.getFirstSessionOrNull()!!

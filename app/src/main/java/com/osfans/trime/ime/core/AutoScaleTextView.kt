@@ -76,6 +76,24 @@ constructor(
     // still be unset when the framework reads the text back.
     override fun getText(): CharSequence = if (::text.isInitialized) text else ""
 
+    /**
+     * Drops the cached text bounds when the size changes.
+     *
+     * The bounds are measured once per text and reused; a bigger size with the same text would
+     * otherwise keep drawing into the box the old size measured, and the glyph or the comment
+     * beside it is clipped at that box's edge. Only [setText] used to reset the cache, which is not
+     * enough when a row re-binds the same candidate at a different scale.
+     */
+    override fun setTextSize(
+        unit: Int,
+        size: Float,
+    ) {
+        super.setTextSize(unit, size)
+        needsMeasureText = true
+        needsCalculateTransform = true
+        requestLayout()
+    }
+
 
     override fun onMeasure(
         widthMeasureSpec: Int,

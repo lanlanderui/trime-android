@@ -158,6 +158,15 @@ object DataManager {
             }
         }
 
+        // The diff above only knows whether the *bundle* changed since the copy last ran, so a
+        // shared directory that lost files while the index stayed in step is invisible to it — and
+        // silently so: the bundled themes just stop being listed. Re-copy whatever is missing.
+        missingDataFiles(newChecksums.files) { path -> sharedDataDir.resolveSibling(path).exists() }
+            .forEach { path ->
+                Timber.w("Restoring missing bundled data: $path")
+                ResourceUtils.copyFile(path, sharedDataDir.resolveSibling(path).absolutePath)
+            }
+
         ResourceUtils.copyFile(DATA_CHECKSUMS_NAME, dataDir.resolve(DATA_CHECKSUMS_NAME).absolutePath)
 
         val custom = userDataDir.resolve(DEFAULT_CUSTOM_FILE_NAME)

@@ -7,8 +7,10 @@ package com.osfans.trime.ime.candidates.unrolled.window
 
 import android.view.Gravity
 import android.view.ViewGroup
+import androidx.transition.Fade
 import androidx.transition.Slide
 import androidx.transition.Transition
+import androidx.transition.TransitionSet
 import com.google.android.flexbox.AlignItems
 import com.google.android.flexbox.FlexboxLayoutManager
 import com.google.android.flexbox.JustifyContent
@@ -22,9 +24,22 @@ import splitties.dimensions.dp
 import splitties.views.dsl.core.wrapContent
 
 class FlexboxUnrolledCandidateWindow(di: DI) : BaseUnrolledCandidateWindow(di) {
-    override fun exitAnimation(nextWindow: BoardWindow): Transition = Slide().apply {
-        slideEdge = Gravity.TOP
+    /**
+     * The window's own come-and-go: a fade with a short drop from the top edge, and the same lift
+     * on the way out.
+     *
+     * It runs slower than the shared default so the rows are seen arriving rather than blinking,
+     * and the fade keeps the panel from looking like a slab dropping in.
+     */
+    private fun unrolledTransition(): Transition = TransitionSet().apply {
+        addTransition(Slide().apply { slideEdge = Gravity.TOP })
+        addTransition(Fade())
+        duration = UNROLLED_ANIMATION_MS
     }
+
+    override fun enterAnimation(lastWindow: BoardWindow): Transition = unrolledTransition()
+
+    override fun exitAnimation(nextWindow: BoardWindow): Transition = unrolledTransition()
 
     override val adapter by lazy {
         object : PagingCandidateViewAdapter(scope) {
@@ -65,5 +80,10 @@ class FlexboxUnrolledCandidateWindow(di: DI) : BaseUnrolledCandidateWindow(di) {
             layoutManager = this@FlexboxUnrolledCandidateWindow.layoutManager
             addItemDecoration(FlexboxHorizontalDecoration(separatorDrawable))
         }
+    }
+
+    private companion object {
+        /** How long the panel takes to arrive or leave, in milliseconds. */
+        const val UNROLLED_ANIMATION_MS = 180L
     }
 }

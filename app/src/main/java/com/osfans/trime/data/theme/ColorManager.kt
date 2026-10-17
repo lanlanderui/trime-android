@@ -15,15 +15,20 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.NinePatchDrawable
 import androidx.annotation.ColorInt
+import androidx.annotation.Keep
 import androidx.collection.LruCache
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.math.MathUtils
 import com.osfans.trime.data.base.DataManager
+import com.osfans.trime.data.prefs.PreferenceDelegate
 import com.osfans.trime.data.theme.model.ColorScheme
 import com.osfans.trime.util.ColorUtils
 import com.osfans.trime.util.NinePatchBitmapFactory
 import com.osfans.trime.util.WeakHashSet
+import com.osfans.trime.util.appContext
 import com.osfans.trime.util.isNightMode
+import java.io.File
+import timber.log.Timber
 
 /**
  * Global entry point for the colors and drawables of the active theme.
@@ -81,7 +86,50 @@ object ColorManager {
         fun onColorChange(theme: Theme)
     }
 
+    /**
+     * Asks the IME to rebuild its input view from scratch.
+     *
+     * Repainting in place is the right path for a colour *edit*: it keeps the views, and with them
+     * the scroll position and the floating keyboard's placement. But it is silent when there is
+     * nothing to repaint — the composed scheme came out identical, so the change notification is
+     * never fired — and it does nothing at all while the keyboard is not on screen. For an explicit
+     * "make it so" from the settings screen, rebuilding is the honest answer: every colour and every
+     * size is read again, whatever the previous attempt did or did not manage.
+     */
+    fun interface OnRebuildListener {
+        fun onRebuildRequested()
+    }
+
     private val onChangeListeners = WeakHashSet<OnColorChangeListener>()
+
+    private val rebuildListeners = WeakHashSet<OnRebuildListener>()
+
+    fun addOnRebuildRequestedListener(listener: OnRebuildListener) {
+        rebuildListeners.add(listener)
+    }
+
+    fun removeOnRebuildRequestedListener(listener: OnRebuildListener) {
+        rebuildListeners.remove(listener)
+    }
+
+    /**
+     * Rebuilds the keyboard, if one is listening, and reports whether anything was.
+     *
+     * The count is what a caller needs in order to be honest: the listeners belong to the IME
+     * service, which registers them once rime is ready, so "nothing was listening" is a normal
+     * state rather than a failure — the next time the keyboard comes up it reads everything afresh.
+     * A caller that says "rebuilt" without checking would be claiming something it cannot know.
+     *
+     * @return how many listeners were notified.
+     */
+    fun requestRebuild(): Int {
+        var notified = 0
+        rebuildListeners.forEach {
+            it.onRebuildRequested()
+            notified++
+        }
+        return notified
+    }
 
     fun addOnChangedListener(listener: OnColorChangeListener) {
         onChangeListeners.add(listener)
@@ -95,9 +143,22 @@ object ColorManager {
         onChangeListeners.forEach { it.onColorChange(requireScope().theme) }
     }
 
+    /**
+     * Re-resolves the active scheme when the colour source flips, so switching
+     * between the theme's own schemes and the built-in palette lands on a
+     * keyboard that is already up.
+     */
+    @Keep
+    private val colorSourceListener =
+        PreferenceDelegate.OnChangeListener<ThemePrefs.ColorSource> { _, _ ->
+            activateScheme(notify = true)
+        }
+
     fun init(configuration: Configuration) {
         isNightMode = configuration.isNightMode()
         activateScheme(notify = false)
+        prefs.colorSource.registerOnChangeListener(colorSourceListener)
+        initialized = true
 
         val maxMemory = Runtime.getRuntime().maxMemory() / 1024
         val cacheSize = maxMemory / 8
@@ -118,6 +179,28 @@ object ColorManager {
     /** The current theme scope, or null before the first theme is attached. */
     fun currentScope(): ThemeScope? = scope
 
+    @Volatile
+    private var initialized = false
+
+    /**
+     * Makes sure the colour pipeline is up, for anything that can run before the IME service does.
+     *
+     * [init] has exactly one caller — the IME service, once rime is ready — so an app launched
+     * straight into its own settings, with the keyboard not running, had no night mode and no
+     * scheme of its own to activate. The damage was quiet and confusing rather than loud: a palette
+     * edit was stored and never painted, and on a dark device the *light* palette was the one
+     * applied, because [isNightMode] still held its initial `false`.
+     *
+     * The scope [init] activates into comes from the theme, so when this runs before any theme has
+     * been resolved that one step does nothing and the activation happens later, in
+     * [attachTheme] — which is why this must *not* go looking for the theme itself. Doing so would
+     * recurse: resolving a theme is what brings the pipeline up.
+     */
+    fun ensureInitialized(configuration: Configuration) {
+        if (initialized) return
+        init(configuration)
+    }
+
     /**
      * Attaches a theme, replacing the current scope. Theme switches notify
      * through ThemeManager, so no color listener fires here.
@@ -125,12 +208,30 @@ object ColorManager {
     fun attachTheme(theme: Theme) {
         bitmapCache?.evictAll()
         scope = ThemeScope(theme)
+        // Bumped before activating rather than only inside [activateScheme]: the scheme-derived
+        // caches are keyed on this, and not every theme change alters the scheme. A size
+        // override moves the theme while leaving every colour identical, so [activateScheme] would
+        // find its target unchanged and return without a bump — leaving every key holding the
+        // drawable and the style value the *previous* theme produced. That is not hypothetical:
+        // `shadow_radius` is read through the same cache.
+        generation++
         activateScheme(notify = false)
     }
 
     fun setColorScheme(scheme: ColorScheme) {
         activateScheme(scheme, notify = true)
         prefs.normalModeColor.setValue(scheme.id)
+    }
+
+    /**
+     * Re-resolves the active scheme after the built-in palette was edited.
+     *
+     * The palette is read on every resolution (see [withBuiltinColors]), so this only has to make
+     * the resolution happen again; the comparison inside [activateScheme] keeps it from repainting
+     * when an edit left the composed colours unchanged.
+     */
+    fun refreshBuiltinColors() {
+        activateScheme(notify = true)
     }
 
     private fun requireScope(): ThemeScope = requireNotNull(scope) { "ColorManager is not initialized" }
@@ -178,12 +279,41 @@ object ColorManager {
         notify: Boolean,
     ) {
         val activeScope = scope ?: return
-        val target = scheme ?: resolveActiveScheme(activeScope.theme)
-        if (activeScope.activeColorScheme == target) return
+        val target = withBuiltinColors(scheme ?: resolveActiveScheme(activeScope.theme))
+        if (activeScope.activeColorScheme == target) {
+            // Worth saying out loud. This is the path a settings edit takes when it changes nothing
+            // — and a caller that cannot tell "nothing to do" from "done" has no way to explain
+            // itself to the user, which is how an empty palette came to look like a broken one.
+            Timber.d("Colour scheme unchanged, nothing to notify")
+            return
+        }
         activeScope.updateScheme(target)
         generation++
         if (notify) fireChange()
     }
+
+    /**
+     * Layers the built-in palette over [scheme] when the user picked it as the colour source.
+     *
+     * The scheme stays the base rather than being replaced — see [composeBuiltinColors] for why
+     * that is what keeps a theme's own colour keys (this theme's `bgn`/`bbs`/`benter`/`bkg` and
+     * its `*_custom_key_*` family) alive. The id is kept too, so the scheme picker still shows
+     * which preset the built-in palette is sitting on.
+     *
+     * The day/night state comes from the system rather than from [ThemePrefs.followSystemDayNight]:
+     * a palette that ships a light and a dark version should track the system even for a user who
+     * has not opted into day/night *scheme* linking.
+     *
+     * A thin adapter over [composeWithPalette], fed from the manager's own state; that function is
+     * where the actual rule lives, and it is pure so it can be tested without a scope.
+     */
+    private fun withBuiltinColors(scheme: ColorScheme): ColorScheme =
+        composeWithPalette(
+            scheme = scheme,
+            palette = BuiltinColorStore.current(),
+            isNight = isNightMode,
+            colorsInCharge = prefs.colorSource.getValue() == ThemePrefs.ColorSource.BUILTIN,
+        )
 
     private fun backgroundFolder(scope: ThemeScope) = scope.theme.generalStyle.backgroundFolder
 
@@ -223,7 +353,15 @@ object ColorManager {
                 // the caller fall back to a key of its own. Parsing the key *name* as a colour, as
                 // this used to, can only fail — it painted a transparent drawable, which is how a key
                 // ends up silently invisible instead of picking up a default.
-                ColorTable.Value.None -> null
+                //
+                // Logged here rather than once for the whole lookup: this branch is the one that ends
+                // the search without a word, so it is the one that makes a mis-resolved key look
+                // identical to a key nobody set. The other two are the ordinary outcomes and are not
+                // worth a line each — every theme switch re-resolves every key.
+                ColorTable.Value.None -> {
+                    Timber.d("resolveDrawable %s -> nothing resolved for a built-in key", key)
+                    null
+                }
             }
         }
         // Keys defined only by a theme resolve through the same chain rules.
@@ -251,7 +389,20 @@ object ColorManager {
             bitmapCache?.get(path)
                 ?: BitmapFactory.decodeFile(path)?.also {
                     bitmapCache?.put(path, it)
-                } ?: return null
+                    // Logged on a real decode only. A cache hit is the ordinary case on every
+                    // re-resolve, and saying "loaded" for a bitmap that was already in memory would
+                    // bury the one line that means the file was actually read off disk.
+                    Timber.d("image decoded: %s -> %s (%dx%d)", value, path, it.width, it.height)
+                }
+        if (bitmap == null) {
+            // A missing or undecodable image is the single most likely reason a themed background
+            // "does nothing", and it fails completely silently -- the caller just gets null and
+            // draws nothing. Log the path that was actually tried, so the two common causes (file
+            // never pushed, file pushed to the wrong place) are distinguishable from a decode
+            // failure on an existing file.
+            Timber.w("image not loadable: %s -> %s (exists=%s)", value, path, File(path).exists())
+            return null
+        }
         if (path.endsWith(".9.png")) {
             val chunk = bitmap.ninePatchChunk
             return if (NinePatch.isNinePatchChunk(chunk)) {
@@ -265,16 +416,35 @@ object ColorManager {
         return bitmap.toDrawable(Resources.getSystem())
     }
 
+    /**
+     * Where a themed background image lives.
+     *
+     * `background_folder` names a folder *inside* `backgrounds/`, so a per-scheme theme puts its
+     * images in `backgrounds/<folder>/`. But its default value is itself `"backgrounds"`, which is
+     * the classic upstream default — so the literal concatenation produces
+     * `backgrounds/backgrounds/<file>`, a path that never exists for anyone who did not go looking
+     * for it and then create it. The flat `backgrounds/<file>` is tried first because that is where
+     * the file actually is in practice, and a theme only has to create the nested folder to get the
+     * per-scheme behaviour it was asking for.
+     *
+     * Returning a path that does not exist is fine: the caller reports it and draws nothing, which
+     * is the honest outcome for a background that was never deployed.
+     */
     private fun resolveImageFilePath(
         scope: ThemeScope,
         value: String,
     ): String {
-        val default = DataManager.userDataDir.resolve("backgrounds/${backgroundFolder(scope)}/$value")
-        if (!default.exists()) {
-            val fallback = DataManager.userDataDir.resolve("backgrounds/$value")
-            if (fallback.exists()) return fallback.absolutePath
+        val root = DataManager.userDataDir
+        val folder = backgroundFolder(scope)
+        val flat = root.resolve("backgrounds/$value")
+        if (flat.exists()) return flat.absolutePath
+        // Skip the redundant segment when the folder *is* "backgrounds", so the log names the path
+        // a reader would actually try rather than the doubled-up one.
+        if (folder != "backgrounds") {
+            val nested = root.resolve("backgrounds/$folder/$value")
+            if (nested.exists()) return nested.absolutePath
         }
-        return default.absolutePath
+        return flat.absolutePath
     }
 
     @ColorInt

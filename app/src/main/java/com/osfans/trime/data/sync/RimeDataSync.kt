@@ -195,6 +195,16 @@ object RimeDataSync {
                 val removeResult = OrphanCleaner.removeLocalOrphans(destRoot, externalPaths, ownId, syncDir)
                 SyncIndex.save(SyncIndex.withCurrentTree(mergeIndexEntries(index.entries, copyResults)))
                 val importStats = mergeStats(copyResults.map { it.result })
+                // A themed background image is the one asset that silently shows nothing when its
+                // copy failed: the theme still resolves, the key still says "image", and only the
+                // drawable is missing. Reporting what actually landed under `backgrounds/` turns
+                // that into something a reader can act on.
+                val localBackgrounds =
+                    destRoot.resolve("backgrounds").listFiles()?.map { it.name }.orEmpty()
+                Timber.d(
+                    "importToLocal: copied=%d failed=%d; local backgrounds/ = %s",
+                    importStats.copied, importStats.failed, localBackgrounds,
+                )
                 if (UserDbMigration.shouldImportUserDb() && importStats.failed == 0) {
                     UserDbMigration.markImported()
                 }

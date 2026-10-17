@@ -28,8 +28,8 @@ android {
         // Upstream ships 3.3.13 as 20261101. A personal build has to carry a higher version code
         // than the build it replaces, or installing it over an older copy is treated as a
         // downgrade, so the date sequence continues rather than restarting.
-        versionCode = 20261102
-        versionName = "3.3.14"
+        versionCode = 20261103
+        versionName = "3.3.15"
 
         multiDexEnabled = true
         buildConfigField("String", "BUILDER", "\"${project.builder}\"")

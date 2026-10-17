@@ -25,4 +25,27 @@ class SymbolHistoryTest :
                 directory.deleteRecursively()
             }
         }
+
+        "a private session records nothing" {
+            val directory = createTempDirectory().toFile()
+            try {
+                val file = File(directory, SymbolHistory.FILE_NAME)
+                file.writeText("old")
+                val history = SymbolHistory(180, file)
+                history.load()
+
+                val previous = PrivacyMode.isActive
+                PrivacyMode.setActive(true)
+                try {
+                    history.insert("secret")
+                } finally {
+                    PrivacyMode.setActive(previous)
+                }
+
+                // The pre-existing entry stays; only the new one is dropped.
+                history.toOrderedList() shouldBe listOf("old")
+            } finally {
+                directory.deleteRecursively()
+            }
+        }
     })

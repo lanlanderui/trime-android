@@ -90,6 +90,18 @@ class DialogSeekBarPreference : DialogPreference {
         value = getPersistedInt(defaultValue as? Int ?: default)
     }
 
+    /**
+     * Adopts whatever the preference store holds now.
+     *
+     * A value can be written by something other than this row -- the colour dialog splits the
+     * alpha it was given into an opacity preference, for instance. The cached [value] would
+     * otherwise stay behind, and both the summary and this row's own dialog would keep showing
+     * the number from before while the store already had the new one.
+     */
+    fun refreshValue() {
+        value = getPersistedInt(default)
+    }
+
     override fun onClick() {
         showSeekBarDialog()
     }

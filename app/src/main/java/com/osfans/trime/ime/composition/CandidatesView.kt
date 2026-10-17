@@ -47,6 +47,7 @@ import splitties.views.dsl.core.withTheme
 import splitties.views.dsl.core.wrapContent
 import splitties.views.horizontalPadding
 import splitties.views.setPaddingDp
+import timber.log.Timber
 import splitties.views.verticalPadding
 import kotlin.math.roundToInt
 
@@ -219,12 +220,12 @@ class CandidatesView(
      * but the value applies either way.
      */
     private fun perLine(): Int {
-        val keyboard = AppPrefs.defaultInstance().keyboard
+        val candidatesPrefs = AppPrefs.defaultInstance().candidates
         val count =
             if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
-                keyboard.maxSpanCount.getValue()
+                candidatesPrefs.maxSpanCount.getValue()
             } else {
-                keyboard.maxSpanCountLandscape.getValue()
+                candidatesPrefs.maxSpanCountLandscape.getValue()
             }
         return count.coerceAtLeast(1)
     }
@@ -281,6 +282,13 @@ class CandidatesView(
         if (visibility != VISIBLE) return
         val (parentWidth, parentHeight) = parentSize
         if (parentWidth <= 0 || parentHeight <= 0) {
+            // A zero parent means no anchor has ever arrived with a usable size, and the window
+            // then sits at (0,0) -- which looks exactly like "following the cursor stopped
+            // working". Say so once per occurrence rather than silently returning.
+            Timber.d(
+                "candidates position: no parent size yet (parentSize=%s, position=%s, anchor=%s)",
+                parentSize.contentToString(), position, anchorPosition,
+            )
             translationX = 0f
             translationY = 0f
             return

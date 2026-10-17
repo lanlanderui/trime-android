@@ -132,6 +132,30 @@ abstract class PreferenceDelegateUi<T : Preference>(
         }
     }
 
+    /**
+     * A colour shown as a plain row.
+     *
+     * The picker itself belongs to the settings side, so this type only builds the row: the
+     * hosting fragment looks it up by [key] and wires the tap and the summary. The value is an
+     * ARGB int whose zero stands for "automatic", which is the one meaning every user of this
+     * row has agreed on.
+     */
+    class ColorPick(
+        @StringRes
+        val title: Int,
+        key: String,
+        val defaultValue: Int,
+        enableUiOn: (() -> Boolean)? = null,
+    ) : PreferenceDelegateUi<Preference>(key, enableUiOn) {
+        override fun createUi(context: Context) = Preference(context).apply {
+            key = this@ColorPick.key
+            isIconSpaceReserved = false
+            isSingleLineTitle = false
+            setDefaultValue(defaultValue)
+            setTitle(this@ColorPick.title)
+        }
+    }
+
     class EditTextInt(
         @StringRes
         val title: Int,

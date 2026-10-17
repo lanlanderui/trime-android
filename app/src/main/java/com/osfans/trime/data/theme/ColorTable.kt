@@ -67,6 +67,13 @@ internal class ColorTable private constructor(
                 if (!value.isNullOrEmpty()) return current to value
                 val fallback = fallbackColors[current]
                 if (!fallback.isNullOrEmpty()) {
+                    // A `fallback_colors` entry normally names another key to inherit from, and
+                    // that is why the walk continues. An image path can never be a key name, so
+                    // when one turns up here it is a literal value and the walk is over. Without
+                    // this, a theme that points a background key at a file *in fallback_colors* —
+                    // the obvious place to put it, and the only place that applies to every scheme
+                    // at once — resolves to nothing at all and the image silently never loads.
+                    if (isImageValue(fallback)) return current to fallback
                     current = fallback
                     continue
                 }

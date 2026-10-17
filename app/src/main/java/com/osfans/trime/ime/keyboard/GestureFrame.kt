@@ -327,8 +327,8 @@ open class GestureFrame(context: Context) : FrameLayout(context) {
         private val repeatInterval by AppPrefs.defaultInstance().keyboard.repeatInterval
         private val doubleTapTimeout by AppPrefs.defaultInstance().keyboard.doubleTapTimeout
         private val slideStepSize by AppPrefs.defaultInstance().keyboard.slideStepSize
-        private val vibrateOnKeyPress by AppPrefs.defaultInstance().keyboard.vibrateOnKeyPress
-        private val vibrateOnKeyRelease by AppPrefs.defaultInstance().keyboard.vibrateOnKeyRelease
-        private val vibrateOnKeyRepeat by AppPrefs.defaultInstance().keyboard.vibrateOnKeyRepeat
+        private val vibrateOnKeyPress by AppPrefs.defaultInstance().feedback.vibrateOnKeyPress
+        private val vibrateOnKeyRelease by AppPrefs.defaultInstance().feedback.vibrateOnKeyRelease
+        private val vibrateOnKeyRepeat by AppPrefs.defaultInstance().feedback.vibrateOnKeyRepeat
     }
 }
