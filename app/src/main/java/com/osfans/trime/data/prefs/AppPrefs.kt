@@ -10,6 +10,7 @@ import android.content.SharedPreferences
 import androidx.annotation.Keep
 import com.osfans.trime.R
 import com.osfans.trime.data.sync.DataStorageMode
+import com.osfans.trime.ime.bar.RightButton
 import com.osfans.trime.ime.candidates.compact.CompactCandidateMode
 import com.osfans.trime.ime.candidates.popup.PopupCandidatesLayout
 import com.osfans.trime.ime.candidates.popup.PopupCandidatesMode
@@ -147,6 +148,7 @@ class AppPrefs(
             const val PREEDIT_KEYBOARD_GAP_MAX_DP = 32
             const val LANDSCAPE_MODE = "keyboard_landscape_mode"
             const val SPLIT_SPACE_PERCENT = "keyboard_split_space"
+            const val BOTTOM_HEIGHT = "keyboard_bottom_height"
 
             const val USE_SOFT_CURSOR = "use_soft_cursor"
             const val HIDE_INPUT_BAR = "hide_input_bar"
@@ -265,6 +267,28 @@ class AppPrefs(
             0,
             200,
             "%",
+        )
+
+        /**
+         * Height of the blank strip below the keys, in dp; zero follows the theme.
+         *
+         * This is the same number the theme spells `keyboard_padding_bottom` — the setting exists
+         * because a theme that reserves too little room leaves the keyboard sitting on the gesture
+         * area, and fixing that used to mean editing the theme file. Zero therefore means "whatever
+         * the theme says", which is also the value that keeps every existing install unchanged.
+         *
+         * The floor of [ACTION_HANDLE_SIZE_DP] is not part of this value: it is applied where the
+         * strip is measured, so a floating keyboard's grips always have room.
+         */
+        val bottomHeight = int(
+            R.string.keyboard_bottom_height,
+            BOTTOM_HEIGHT,
+            0,
+            0,
+            96,
+            "dp",
+            defaultLabel = R.string.style_source_theme,
+            useMinAsDefault = true,
         )
 
         val useSoftCursor = switch(R.string.use_soft_cursor, USE_SOFT_CURSOR, true)
@@ -570,6 +594,7 @@ class AppPrefs(
             const val STRIP_LENGTH = "candidates_strip_length"
             const val STRIP_GAP = "candidates_strip_gap"
             const val CORNER_TOGGLES_COMPOSING = "corner_toggles_composing"
+            const val RIGHT_BUTTONS = "candidates_right_buttons"
             const val SWITCHES_IN_WINDOW = "switches_in_window"
             const val TWO_ROW_FONT = "candidates_two_row_font"
             const val ITEM_BACKGROUND = "candidates_item_background"
@@ -679,6 +704,21 @@ class AppPrefs(
             0,
             24,
             "dp",
+        )
+
+        /**
+         * Which of the quick switches ride the row at all.
+         *
+         * The value is a comma-separated list of [RightButton] ids, defaulting to all of them --
+         * everything the row has always shown. The trailing slot reacts to the size of the set:
+         * one button is shown on its own (no stow toggle to reach it through), two or more fold
+         * into the stow toggle, and none leaves the slot empty.
+         */
+        val rightButtons = multiSelect(
+            R.string.candidates_right_buttons,
+            RIGHT_BUTTONS,
+            RightButton.ALL_IDS,
+            R.string.candidates_right_buttons_summary,
         )
 
         /**

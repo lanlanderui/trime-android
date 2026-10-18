@@ -178,6 +178,29 @@ abstract class PreferenceDelegateOwner(
         return pref
     }
 
+    /**
+     * A set of ids edited through a dialog the settings side owns.
+     *
+     * The row is built here; the tap and the summary need the dialog, which lives above this
+     * layer, so the hosting fragment finds the row by key and fills them in. The value is the ids
+     * joined by commas, which keeps it readable in the preferences file and still a plain string.
+     */
+    protected fun multiSelect(
+        @StringRes
+        title: Int,
+        key: String,
+        defaultValue: String,
+        @StringRes
+        summary: Int? = null,
+        enableUiOn: (() -> Boolean)? = null,
+    ): PreferenceDelegate<String> {
+        val pref = PreferenceDelegate(sharedPreferences, key, defaultValue)
+        val ui = PreferenceDelegateUi.MultiSelect(title, key, defaultValue, summary, enableUiOn)
+        pref.register()
+        ui.registerUi()
+        return pref
+    }
+
     protected fun int(
         @StringRes
         title: Int,

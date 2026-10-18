@@ -82,6 +82,15 @@ class KeyboardWindow(di: DI) :
             private set(value) {
                 currentKeyboardRef = WeakReference(value)
             }
+
+        /**
+         * The keyboard on screen, or null when none has been built yet.
+         *
+         * Resolved rather than thrown: screens outside the keyboard (the colour preview, opened
+         * from the app before an editor ever asked for input) want to draw what the keyboard
+         * would look like, and "nothing on screen" is an answer, not an error.
+         */
+        val currentKeyboardOrNull: Keyboard? get() = currentKeyboardRef?.get()
     }
 
     override val key: ResidentWindow.Key
@@ -181,7 +190,7 @@ class KeyboardWindow(di: DI) :
         keyboard.also {
             runBlocking { _currentKeyboardHeight.emit(it.keyboardHeight) }
             if (it.isLock) lastLockKeyboardId = target
-            dispatchCapsState(it::setShifted)
+            dispatchCapsState(it, it::setShifted)
 
             val currentMode = rime.status.isAsciiMode
             val targetMode = if (it.resetAsciiMode) it.asciiMode else it.lastAsciiMode
@@ -352,12 +361,21 @@ class KeyboardWindow(di: DI) :
         }
     }
 
-    private fun dispatchCapsState(setShift: (Boolean, Boolean) -> Unit) {
-        val status = rime.status
-        // TODO: 启用自动首句大写后，点击方向键时，保持Shift锁定状态功能将无法生效
-        if (theme.generalStyle.autoCaps && status.isAsciiMode && currentKeyboardView?.isCapsOn == false) {
-            setShift(false, cursorCapsMode != 0)
+    private fun dispatchCapsState(
+        keyboard: Keyboard,
+        setShift: (Boolean, Boolean) -> Unit,
+    ) {
+        if (!shouldAutoShift(
+                autoCaps = theme.generalStyle.autoCaps,
+                asciiMode = rime.status.isAsciiMode,
+                shiftLocked = keyboard.mShiftKey?.isOn == true,
+                shiftOn = keyboard.isShifted,
+                fromAutoCaps = keyboard.shiftFromAutoCaps,
+            )
+        ) {
+            return
         }
+        setShift(false, cursorCapsMode != 0)
     }
 
     override fun onKeyAppearanceUpdate(composing: Boolean, menu: Boolean, paging: Boolean) {
@@ -372,8 +390,9 @@ class KeyboardWindow(di: DI) :
         start: Int,
         end: Int,
     ) {
-        dispatchCapsState { on, shifted ->
-            activeKeyboard?.setShifted(on, shifted)?.let { if (it) currentKeyboardView?.invalidateAllKeys() }
+        val keyboard = activeKeyboard ?: return
+        dispatchCapsState(keyboard) { on, shifted ->
+            if (keyboard.setShifted(on, shifted)) currentKeyboardView?.invalidateAllKeys()
         }
     }
 
@@ -413,3 +432,20 @@ class KeyboardWindow(di: DI) :
         currentKeyboardView?.onDetach()
     }
 }
+
+/**
+ * Whether auto-capitalisation may write the shift state right now.
+ *
+ * Two states are off limits. A **locked** shift is the user's, and turns itself off when they say
+ * so. A shift the user **pressed** is theirs too, until typing consumes it -- rewriting it on every
+ * cursor move is what used to break "keep Shift for arrow keys": the first arrow cleared the shift
+ * the rest of the selection depended on. Only a shift that auto capitalisation itself put there
+ * may be taken back.
+ */
+internal fun shouldAutoShift(
+    autoCaps: Boolean,
+    asciiMode: Boolean,
+    shiftLocked: Boolean,
+    shiftOn: Boolean,
+    fromAutoCaps: Boolean,
+): Boolean = autoCaps && asciiMode && !shiftLocked && (fromAutoCaps || !shiftOn)

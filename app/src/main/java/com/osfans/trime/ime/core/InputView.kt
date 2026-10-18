@@ -274,10 +274,10 @@ internal const val GRIP_MARGIN_DP = 12
 /**
  * Height of the strip reserved below the keys, in dp.
  *
- * The strip exists for one reason: the IME toggles live in it, and a theme that reserves less
- * room than they need (`keyboard_padding_bottom: 0` is common) would have them sitting on the
- * keys. So the theme's own value is honoured as a floor, never as a ceiling — a theme can make
- * the strip taller, and it can never make it too short to hold the toggles.
+ * The only thing that needs room down here now is the floating keyboard's grips: while the card
+ * floats, its move and resize handles are pinned inside this strip, so it may not be shorter than
+ * one handle or they would hang off the card. Docked, nothing lives in the strip -- the IME
+ * toggles moved into the row above the keys -- so the value is taken as written, including zero.
  *
  * The strip is deliberately *not* painted: the keyboard's own background already covers the whole
  * surface (see [applyKeyboardBackdrop]), so filling it again with the same translucent colour
@@ -286,7 +286,8 @@ internal const val GRIP_MARGIN_DP = 12
 internal fun reservedBottomStripDp(
     themePaddingDp: Int,
     handleSizeDp: Int,
-): Int = maxOf(themePaddingDp, handleSizeDp)
+    needsHandleRoom: Boolean,
+): Int = if (needsHandleRoom) maxOf(themePaddingDp, handleSizeDp) else themePaddingDp
 
 /** Lets a floating keyboard move with two fingers even when keys fill its surface. */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
@@ -626,6 +627,8 @@ class InputView(
     private val keyboardSidePaddingLandscape = theme.generalStyle.keyboardPaddingLand
     private val keyboardBottomPadding = theme.generalStyle.keyboardPaddingBottom
     private val keyboardBottomPaddingLandscape = theme.generalStyle.keyboardPaddingLandBottom
+    private val bottomHeight = AppPrefs.defaultInstance().keyboard.bottomHeight
+    private val floatingKeyboard = AppPrefs.defaultInstance().keyboard.floatingKeyboard
 
     private val keyboardSidePaddingPx: Int
         get() {
@@ -657,7 +660,12 @@ class InputView(
             val landscape = context.isLandscapeMode()
             val themePadding =
                 if (landscape) keyboardBottomPaddingLandscape else keyboardBottomPadding
-            return dp(reservedBottomStripDp(themePadding, ACTION_HANDLE_SIZE_DP))
+            // The setting is the same number the theme spells `keyboard_padding_bottom`; zero
+            // means "whatever the theme says", which is what keeps existing installs unchanged.
+            val chosen = bottomHeight.getValue().takeIf { it > 0 } ?: themePadding
+            // The 36dp floor belongs to the floating card, whose grips live in this strip; a
+            // docked keyboard has nothing down here, so its padding is exactly what was asked for.
+            return dp(reservedBottomStripDp(chosen, ACTION_HANDLE_SIZE_DP, floatingKeyboard.getValue()))
         }
 
     /**

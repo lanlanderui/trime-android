@@ -50,33 +50,48 @@ class ActionHandleAnchorTest :
         // keyboard_padding_bottom. Its floor is the handle size itself: the side margin moves
         // handles sideways only, so it must not make the strip taller -- that is what made raising
         // the margin feel like padding all four edges at once.
-        Given("handles that are 36dp tall") {
+        Given("a floating keyboard, where the grips live in the strip") {
             val handle = ACTION_HANDLE_SIZE_DP
 
             Then("the theme padding is used when it is generous enough") {
-                reservedBottomStripDp(themePaddingDp = 60, handleSizeDp = handle) shouldBe 60
+                reservedBottomStripDp(60, handle, needsHandleRoom = true) shouldBe 60
             }
 
             Then("the strip grows to fit the handles when the theme reserves too little") {
-                reservedBottomStripDp(themePaddingDp = 35, handleSizeDp = handle) shouldBe 36
+                reservedBottomStripDp(35, handle, needsHandleRoom = true) shouldBe 36
             }
 
             Then("a theme padding of exactly the handle height is kept") {
-                reservedBottomStripDp(themePaddingDp = 36, handleSizeDp = handle) shouldBe 36
+                reservedBottomStripDp(36, handle, needsHandleRoom = true) shouldBe 36
             }
 
             Then("no theme padding can push the strip below the handles") {
                 listOf(0, 1, 12, 35).forEach { padding ->
-                    reservedBottomStripDp(padding, handle) shouldBe 36
+                    reservedBottomStripDp(padding, handle, needsHandleRoom = true) shouldBe 36
                 }
             }
 
             Then("a taller theme padding wins, so a theme can still raise the keyboard") {
-                reservedBottomStripDp(themePaddingDp = 96, handleSizeDp = handle) shouldBe 96
+                reservedBottomStripDp(96, handle, needsHandleRoom = true) shouldBe 96
             }
 
             Then("a negative theme padding still leaves room for the handles") {
-                reservedBottomStripDp(themePaddingDp = -5, handleSizeDp = handle) shouldBe 36
+                reservedBottomStripDp(-5, handle, needsHandleRoom = true) shouldBe 36
+            }
+        }
+
+        // Docked, nothing lives down there: the grips are hidden and the toggles moved into the row
+        // above the keys. The value is the user's, not a floor -- asking for 2dp to sit the keys
+        // against the screen edge has to yield 2dp, or the setting is a silent no-op.
+        Given("a docked keyboard, where the strip holds nothing") {
+            Then("the padding is taken as written, down to zero") {
+                listOf(0, 1, 2, 12, 35).forEach { padding ->
+                    reservedBottomStripDp(padding, ACTION_HANDLE_SIZE_DP, needsHandleRoom = false) shouldBe padding
+                }
+            }
+
+            Then("a generous padding is still honoured") {
+                reservedBottomStripDp(96, ACTION_HANDLE_SIZE_DP, needsHandleRoom = false) shouldBe 96
             }
         }
     })

@@ -6,12 +6,16 @@
 
 package com.osfans.trime.ime.bar.ui
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.MarginLayoutParams
+import android.view.animation.PathInterpolator
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.updateLayoutParams
@@ -72,6 +76,13 @@ class MonitorCandidateUi(
     onSwipeDown: ((KeyBehavior) -> Unit)? = null,
     /** Opens the quick switches on a window, for when the strip cannot hold them all. */
     private val onSwitchesRequested: (() -> Unit)? = null,
+    /**
+     * The one switch the corner-button setting leaves, if it leaves exactly one.
+     *
+     * With a single switch there is nothing to stow, so showing the stow toggle would make the
+     * user tap through a fold to reach the only control in it. The button takes the slot itself.
+     */
+    private val singleSwitch: View? = null,
 ) : Ui {
     private val theme: Theme get() = scope.theme
 
@@ -228,11 +239,71 @@ class MonitorCandidateUi(
     /** While typing, the row ends in the expand toggle; idle, it ends in the stow toggle. */
     fun setComposing(composing: Boolean) {
         if (this.composing == composing) return
+        val hadCorners = !this.composing || cornerToggles.getValue()
         this.composing = composing
         // The switches row is reachable only through the stow toggle, which is not on screen while
         // typing -- so typing takes the row back to the candidates rather than leaving it stranded.
         if (composing && switchesShown) setSwitchesShown(false)
+        val hasCorners = !composing || cornerToggles.getValue()
+        // The only moment the strip changes width is when the corner toggles step aside, which is
+        // the state "hide the corner toggles while composing" describes. Animating it is what turns
+        // the jump into the bar growing out from under the candidates and shrinking back when the
+        // composition ends. With the fill switched off there is no bar to grow, and animating the
+        // width would only reflow the row for nothing.
+        if (hadCorners != hasCorners && stripFill() != null) animateStripWidth(hasCorners)
         applyEndSlot()
+    }
+
+    /** Cancels and releases a width animation; the strip goes back to its constrained width. */
+    private var stripWidthAnimator: ValueAnimator? = null
+
+    /**
+     * Grows (or shrinks) the strip to the width the new row layout gives it.
+     *
+     * The corner toggles hand their two slots to the strip, and the strip's slot expands by the
+     * same amount on both sides, so its centre does not move: animating the width alone reads as
+     * the bar extending outwards from where it was. The width is taken over from the constraint
+     * for the length of the run and handed back at the end, so a later length change still works.
+     */
+    private fun animateStripWidth(cornersVisible: Boolean) {
+        val inner = root.width - root.paddingStart - root.paddingEnd
+        if (inner <= 0) return
+        val trackWidth = inner - if (cornersVisible) flankWidthPx * 2 else 0
+        val target = (trackWidth * stripLengthPercent.getValue() / 100f).toInt()
+        val from = contentStrip.width
+        if (from <= 0 || target <= 0 || from == target) return
+        stripWidthAnimator?.cancel()
+        val params = contentStrip.layoutParams as? ConstraintLayout.LayoutParams ?: return
+        params.width = from
+        contentStrip.layoutParams = params
+        stripWidthAnimator = ValueAnimator.ofInt(from, target).apply {
+            duration = STRIP_WIDTH_MS
+            interpolator = STRIP_INTERPOLATOR
+            addUpdateListener { animator ->
+                val lp = contentStrip.layoutParams as? ConstraintLayout.LayoutParams
+                    ?: return@addUpdateListener
+                lp.width = animator.animatedValue as Int
+                contentStrip.layoutParams = lp
+            }
+            addListener(
+                object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        if (stripWidthAnimator !== animation) return
+                        stripWidthAnimator = null
+                        releaseStripWidth()
+                    }
+                },
+            )
+            start()
+        }
+    }
+
+    /** Hands the width back to the length constraint, at whatever length it now says. */
+    private fun releaseStripWidth() {
+        val lp = contentStrip.layoutParams as? ConstraintLayout.LayoutParams ?: return
+        lp.width = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
+        applyStripLength(lp)
+        contentStrip.layoutParams = lp
     }
 
     /** Whether the expand toggle has anything left to expand; the bar's state machine decides. */
@@ -254,9 +325,26 @@ class MonitorCandidateUi(
             corners -> View.INVISIBLE
             else -> View.GONE
         }
+        // The trailing slot has three shapes, decided by how many switches are left:
+        // one button -> that button; none -> no slot at all; two or more -> the stow toggle.
+        val single = singleSwitch
+        if (single != null) {
+            // Typing hands the slot to the expand toggle above. The button keeps its span as
+            // INVISIBLE so the strip does not slide under the chevron for the length of a
+            // composition -- the same reason the stow toggle goes INVISIBLE rather than GONE.
+            single.visibility = when {
+                !corners -> View.GONE
+                composing -> View.INVISIBLE
+                else -> View.VISIBLE
+            }
+            switchToggle.visibility = View.GONE
+            return
+        }
+        val nothingToStow = (switchesBar as? ViewGroup)?.childCount == 0
         switchToggle.visibility = when {
             !corners -> View.GONE
             composing -> View.INVISIBLE
+            nothingToStow -> View.GONE
             else -> View.VISIBLE
         }
     }
@@ -264,6 +352,39 @@ class MonitorCandidateUi(
     /** Re-applies the corner toggles after their switch changed, without a rebuild. */
     fun refreshCornerToggles() {
         applyEndSlot()
+    }
+
+    /**
+     * Moves the one configured switch into the trailing slot.
+     *
+     * The button is re-parented rather than rebuilt: same view, same listener, same colours, so a
+     * theme button keeps the look it has in the switches row and the floating toggle keeps
+     * flipping its own icon. Its own width and height come along, which keeps it the size the
+     * theme gives that button rather than the size of the flank it now sits in.
+     *
+     * The strip's end is re-anchored to this button. It used to end at the stow toggle, which is
+     * GONE here -- and a GONE anchor sits at the row's end with no width, so the strip would run
+     * underneath the button (the overlap this slot exists to avoid).
+     */
+    private fun attachSingleSwitch() {
+        val button = singleSwitch ?: return
+        val params = button.layoutParams
+        val width = params?.width?.takeIf { it > 0 } ?: flankWidthPx
+        val height = params?.height?.takeIf { it > 0 } ?: flankHeightPx
+        (button.parent as? ViewGroup)?.removeView(button)
+        if (button.id == View.NO_ID) button.id = View.generateViewId()
+        root.addView(
+            button,
+            ConstraintLayout.LayoutParams(width, height).apply {
+                endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+                topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+                bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+            },
+        )
+        stripTrack.updateLayoutParams<ConstraintLayout.LayoutParams> {
+            endToStart = button.id
+            endToEnd = ConstraintLayout.LayoutParams.UNSET
+        }
     }
 
     /**
@@ -378,6 +499,9 @@ class MonitorCandidateUi(
     }
 
     init {
+        // The single switch (if the setting leaves one) has to be in place before the slot is
+        // applied, since the slot decides its visibility.
+        attachSingleSwitch()
         // The strip belongs to the candidates until the toggle is asked for the switches. The
         // first assignment is not a flip, so it does not fade -- at build time both layers would
         // be on screen for the length of an animation nobody asked for.
@@ -417,6 +541,8 @@ class MonitorCandidateUi(
 
     /** Re-applies the strip's length after its preference changed, without a rebuild. */
     fun refreshStripLength() {
+        // A run in flight would keep writing its own width over the new length.
+        stripWidthAnimator?.cancel()
         contentStrip.updateLayoutParams<ConstraintLayout.LayoutParams> { applyStripLength(this) }
     }
 
@@ -435,6 +561,7 @@ class MonitorCandidateUi(
         unrollButton.refreshColors()
         privacyButton.refreshColors()
         switchToggle.refreshColors()
+        (singleSwitch as? ToolButton)?.refreshColors()
     }
 
     private companion object {
@@ -443,5 +570,17 @@ class MonitorCandidateUi(
 
         /** Length of the candidates-to-switches flip, in milliseconds. */
         const val SWITCH_FADE_MS = 120L
+
+        /**
+         * Length of the strip growing or shrinking as the corner toggles step aside.
+         *
+         * Kept short on purpose: the bar changes width on every composition start and end, so a
+         * long run stops reading as "the row made room" and starts reading as an animation the
+         * user has to wait through, several times a sentence.
+         */
+        const val STRIP_WIDTH_MS = 140L
+
+        /** Decelerating curve, so the bar arrives rather than stopping dead. */
+        val STRIP_INTERPOLATOR = PathInterpolator(0.2f, 0f, 0f, 1f)
     }
 }

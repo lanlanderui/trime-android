@@ -13,9 +13,11 @@ import com.google.android.flexbox.AlignItems
 import com.google.android.flexbox.FlexDirection
 import com.google.android.flexbox.FlexboxLayout
 import com.google.android.flexbox.JustifyContent
+import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.theme.Theme
 import com.osfans.trime.data.theme.ThemeScope
 import com.osfans.trime.data.theme.model.ToolBar
+import com.osfans.trime.ime.bar.RightButton
 import splitties.dimensions.dp
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.view
@@ -71,13 +73,22 @@ class ButtonsBarUi(
 
     init {
         val buttons = theme.toolBar.buttons
-        // The whole set rides the row: the first button used to sit apart as an alternate face of
-        // the hide button, but the hide button's own spot is gone, so nothing holds it back.
-        firstButton = buttons.firstOrNull()?.let { config ->
+        // A theme declares its own buttons, but which of them this app knows by name is a fixed
+        // list: the three here are the ones the corner-button setting can switch off. A button
+        // the theme invents has no name to configure, so it always rides along.
+        val chosen = RightButton.parse(AppPrefs.defaultInstance().candidates.rightButtons.getValue())
+        val kept = buttons.filter { config ->
+            val known = RightButton.ofThemeAction(config.action)
+            known == null || known in chosen
+        }
+        // The whole kept set rides the row: the first button used to sit apart as an alternate
+        // face of the hide button, but the hide button's own spot is gone, so nothing holds it
+        // back.
+        firstButton = kept.firstOrNull()?.let { config ->
             toolButton(config).also { addButton(it, config) }
         }
 
-        buttons.drop(1).forEach { config ->
+        kept.drop(1).forEach { config ->
             addButton(toolButton(config), config)
         }
     }

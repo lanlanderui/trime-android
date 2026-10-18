@@ -56,6 +56,15 @@ class Keyboard(
     var mSymKey: Key? = null
 
     /**
+     * 當前 Shift 狀態是否由「自動首句大寫」寫入，而非使用者自己按的。
+     *
+     * 只有自動寫入的狀態才允許被下一次 `dispatchCapsState` 覆蓋：使用者按住的 Shift 在被打字消耗
+     * 之前屬於他本人，方向鍵連按選字靠的就是這個 —— 否则一次光标移动就会把 Shift 清掉。
+     */
+    var shiftFromAutoCaps: Boolean = false
+        private set
+
+    /**
      * Total height of the keyboard, including the padding and keys
      *
      * @return the total height of the keyboard
@@ -396,6 +405,7 @@ class Keyboard(
         shifted: Boolean,
     ): Boolean {
         mShiftKey?.setOn(on)
+        shiftFromAutoCaps = shifted
         return setModifier(KeyEvent.META_SHIFT_ON, shifted)
     }
 
@@ -421,6 +431,8 @@ class Keyboard(
                 else -> null
             }
         val keepOn = modifierKey?.setOn(on) ?: on
+        // 使用者亲手按了 Shift ⇒ 自動大寫不再擁有這個狀態
+        if (keycode == KeyEvent.META_SHIFT_ON) shiftFromAutoCaps = false
         return if (on) setModifier(keycode, keepOn) else setModifier(keycode, keyDown)
     }
 

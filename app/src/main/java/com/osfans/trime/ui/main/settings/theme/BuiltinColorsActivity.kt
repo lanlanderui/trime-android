@@ -47,6 +47,7 @@ import com.osfans.trime.data.theme.summary
 import com.osfans.trime.data.theme.valueOf
 import com.osfans.trime.data.theme.withStyleValues
 import com.osfans.trime.databinding.ActivityBuiltinColorsBinding
+import com.osfans.trime.ime.keyboard.KeyboardWindow
 import com.osfans.trime.util.ColorUtils
 import com.osfans.trime.util.isNightMode
 import com.osfans.trime.util.toast
@@ -266,11 +267,23 @@ class BuiltinColorsActivity : AppCompatActivity() {
                 }
             },
         )
-        // The renderer starts on the theme's `default` keyboard, so the preview does too, and it
-        // takes the theme's own key labels: without them a command key would show the name it goes
-        // by in the file (`BackSpace`) instead of the glyph it shows on screen (`⊗`).
-        val keyboard = theme.presetKeyboards["default"] ?: theme.presetKeyboards.values.firstOrNull()
-        binding.colorsPreview.setKeyboard(keyboard, theme.presetKeys.mapValues { it.value.label })
+        // The preview draws the keyboard that is actually on screen: that is the only way it can
+        // promise to look like the one behind it. The theme's `default` is merely where the IME
+        // starts -- a schema, a rotation or an explicit switch may have replaced it since.
+        val live = KeyboardWindow.currentKeyboardOrNull
+        if (live != null) {
+            val rows = previewRows(live, theme.presetKeys.mapValues { it.value.label })
+            val rowHeight = if (rows.isEmpty()) 0 else live.height / rows.size
+            val aspect = if (live.minWidth > 0) live.height.toFloat() / live.minWidth else 0f
+            binding.colorsPreview.setKeyboard(rows, live.roundCorner, live.keyBorder, rowHeight, aspect)
+        } else {
+            // No keyboard has been built yet (the settings opened before an editor ever asked for
+            // input), so fall back to the theme's own default -- what the keyboard would start on.
+            // It takes the theme's own key labels: without them a command key would show the name
+            // it goes by in the file (`BackSpace`) instead of the glyph on screen (`⊗`).
+            val keyboard = theme.presetKeyboards["default"] ?: theme.presetKeyboards.values.firstOrNull()
+            binding.colorsPreview.setKeyboard(keyboard, theme.presetKeys.mapValues { it.value.label })
+        }
         binding.colorsPreview.setStyle(previewStyle())
         refreshers += { binding.colorsStatus.text = activeStatus() }
         refreshStatus()

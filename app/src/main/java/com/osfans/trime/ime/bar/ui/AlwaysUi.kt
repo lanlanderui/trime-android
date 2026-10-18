@@ -12,9 +12,11 @@ import androidx.annotation.DrawableRes
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.children
 import com.osfans.trime.R
+import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.theme.Theme
 import com.osfans.trime.data.theme.ThemeScope
 import com.osfans.trime.data.theme.model.ToolBar
+import com.osfans.trime.ime.bar.RightButton
 import splitties.views.dsl.constraintlayout.after
 import splitties.views.dsl.constraintlayout.before
 import splitties.views.dsl.constraintlayout.centerVertically
@@ -107,7 +109,27 @@ class AlwaysUi(
     init {
         // The floating-keyboard toggle is one of the quick switches now: it rides the resident
         // strip row with the theme's buttons instead of the (retired) toolbar row.
-        buttonsUi.addButton(floatingKeyboardButton, null)
+        val chosen = RightButton.parse(AppPrefs.defaultInstance().candidates.rightButtons.getValue())
+        if (RightButton.FLOATING in chosen) {
+            buttonsUi.addButton(floatingKeyboardButton, null)
+        }
+    }
+
+    /**
+     * Buttons taken out of the row to be shown somewhere else -- the trailing slot, when the
+     * corner-button setting leaves exactly one of them.
+     *
+     * They keep their listeners and their views, but they are no longer children of [buttonsUi],
+     * so the style updates would pass them by. Keeping the references here is what lets the
+     * mode switch keep flipping its label wherever it sits.
+     */
+    private val detachedButtons = mutableListOf<ToolButton>()
+
+    /** Moves [button] out of the switches row, still tracked for style updates. */
+    fun detachButton(button: ToolButton): ToolButton {
+        buttonsUi.root.removeView(button)
+        if (button !in detachedButtons) detachedButtons += button
+        return button
     }
 
     /**
@@ -193,12 +215,14 @@ class AlwaysUi(
         leftMostButton.updateStyle(option, enabled)
         buttonsUi.firstButton?.updateStyle(option, enabled)
         buttonsUi.updateStyle(option, enabled)
+        detachedButtons.forEach { it.updateStyle(option, enabled) }
     }
 
     fun toggleOptions(): Set<String> = buildSet {
         leftMostButton.option?.let { add(it) }
         buttonsUi.firstButton?.option?.let { add(it) }
         buttonsUi.root.children.forEach { (it as ToolButton).option?.let { add(it) } }
+        detachedButtons.forEach { it.option?.let { add(it) } }
     }
 
     fun updateState(state: State) {

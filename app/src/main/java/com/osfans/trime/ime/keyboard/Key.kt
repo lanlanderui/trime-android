@@ -58,6 +58,15 @@ class Key(
     val hint: String = selfConfig?.hint ?: ""
     val popup = selfConfig?.popup ?: emptyList()
 
+    /**
+     * The theme entry this key was built from.
+     *
+     * The colour preview draws the keyboard that is actually on screen, and that means reading
+     * the same per-key colours and labels the keyboard itself reads. Exposing the entry is
+     * cheaper than a second copy of every field the preview would have to stay in step with.
+     */
+    val config: TextKeyboard.TextKey? get() = selfConfig
+
     val keyTextSize: Float = selfConfig?.keyTextSize ?: 0f
     val symbolTextSize: Float = selfConfig?.symbolTextSize ?: 0f
     val roundCorner: Float = selfConfig?.roundCorner?.takeIf { it >= 0 } ?: parent.roundCorner

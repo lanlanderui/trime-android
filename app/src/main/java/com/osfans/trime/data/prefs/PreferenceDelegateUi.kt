@@ -156,6 +156,34 @@ abstract class PreferenceDelegateUi<T : Preference>(
         }
     }
 
+    /**
+     * A set of ids edited through a dialog the settings side owns.
+     *
+     * Same arrangement as [ColorPick]: this type only builds the row, the hosting fragment wires
+     * the tap and the summary. The value is the ids joined by commas -- a plain string, so the
+     * preference framework's own persistence carries it and a hand-edited file still parses.
+     */
+    class MultiSelect(
+        @StringRes
+        val title: Int,
+        key: String,
+        val defaultValue: String,
+        @StringRes
+        val summary: Int? = null,
+        enableUiOn: (() -> Boolean)? = null,
+    ) : PreferenceDelegateUi<Preference>(key, enableUiOn) {
+        override fun createUi(context: Context) = Preference(context).apply {
+            key = this@MultiSelect.key
+            isIconSpaceReserved = false
+            isSingleLineTitle = false
+            setDefaultValue(defaultValue)
+            setTitle(this@MultiSelect.title)
+            if (this@MultiSelect.summary != null) {
+                setSummary(this@MultiSelect.summary)
+            }
+        }
+    }
+
     class EditTextInt(
         @StringRes
         val title: Int,

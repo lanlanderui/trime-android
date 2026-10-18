@@ -11,12 +11,14 @@ import android.graphics.Color
 import androidx.core.graphics.ColorUtils
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.osfans.trime.R
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.prefs.PrefSection
 import com.osfans.trime.data.prefs.PreferenceDelegateFragment
 import com.osfans.trime.data.prefs.ProviderSections
 import com.osfans.trime.data.theme.ColorManager
+import com.osfans.trime.ime.bar.RightButton
 import com.osfans.trime.ui.main.settings.theme.BuiltinColorDialog
 import com.osfans.trime.util.ColorUtils as TrimeColorUtils
 import java.util.Locale
@@ -48,6 +50,7 @@ class CandidatesSettingsFragment : PreferenceDelegateFragment(
                 PrefSection(
                     R.string.section_candidates_toggles,
                     listOf(
+                        AppPrefs.Candidates.RIGHT_BUTTONS,
                         AppPrefs.Candidates.CORNER_TOGGLES_COMPOSING,
                         AppPrefs.Candidates.SWITCHES_IN_WINDOW,
                     ),
@@ -100,6 +103,42 @@ class CandidatesSettingsFragment : PreferenceDelegateFragment(
                 true
             }
         }
+        // Which switches the row carries is a set, and the framework's own list rows are
+        // single-choice, so the row gets a multi-choice dialog wired the same way as the colour.
+        screen.findPreference<Preference>(AppPrefs.Candidates.RIGHT_BUTTONS)?.apply {
+            summaryProvider = Preference.SummaryProvider<Preference> { preference ->
+                rightButtonsLabel(preference.context, prefs.rightButtons.getValue())
+            }
+            setOnPreferenceClickListener {
+                showRightButtonsDialog()
+                true
+            }
+        }
+    }
+
+    /**
+     * The set of buttons the strip row carries.
+     *
+     * Confirming writes the ids, which is what rebuilds the input view -- the row cannot grow or
+     * lose a button in place, since the trailing slot's shape depends on the count.
+     */
+    private fun showRightButtonsDialog() {
+        val context = requireContext()
+        val buttons = RightButton.ALL
+        val chosen = RightButton.parse(prefs.rightButtons.getValue()).toMutableSet()
+        val labels = buttons.map { context.getString(it.label) }.toTypedArray()
+        val checked = buttons.map { it in chosen }.toBooleanArray()
+        MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.candidates_right_buttons)
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                if (isChecked) chosen += buttons[which] else chosen -= buttons[which]
+            }
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                prefs.rightButtons.setValue(RightButton.serialize(chosen))
+                rebindRows()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun showStripColorDialog() {
@@ -175,3 +214,16 @@ internal fun stripColorLabel(context: Context, color: Int): String =
     } else {
         String.format(Locale.ROOT, "#%06X", color and 0x00FFFFFF)
     }
+
+/**
+ * The corner-button row's summary: the names of the buttons left in, in the dialog's own order.
+ * Kept free of Android types beyond the string lookups so the text itself stays testable.
+ */
+internal fun rightButtonsLabel(context: Context, raw: String): String {
+    val chosen = RightButton.parse(raw)
+    if (chosen.isEmpty()) return context.getString(R.string.right_buttons_none)
+    val names = chosen.joinToString(context.getString(R.string.right_buttons_separator)) {
+        context.getString(it.label)
+    }
+    return context.getString(R.string.right_buttons_selected, names)
+}

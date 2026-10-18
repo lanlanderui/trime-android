@@ -155,6 +155,8 @@
     <string name="custom_sound_effect_enabled">Use custom key sound</string>
     <string name="enable_landscape_mode">Enable Landscape Mode</string>
     <string name="split_space_percent">Auto Split Keyboard Space Ratio</string>
+    <string name="keyboard_bottom_height">Bottom padding height</string>
+    <string name="keyboard_bottom_height_summary">Zero follows the theme\'s keyboard_padding_bottom. Larger values keep more blank space below the keys; a floating keyboard always keeps 36dp for its grips.</string>
     <string name="floating_keyboard">Floating keyboard</string>
     <string name="floating_keyboard_summary">Show the keyboard as a movable card. Drag the bottom-left grip or use two fingers to move it, double-tap the grip to reset its position, and drag the bottom-right corner to resize it.</string>
     <string name="floating_preedit_offset_x">Preedit horizontal position (0% leftmost · 100% rightmost)</string>
@@ -251,6 +253,17 @@
     <string name="corner_toggles_composing_summary">Off hides the menu and stow toggles while a composition is running, leaving the whole strip to the candidates</string>
     <string name="switches_in_window">Always open switches in a window</string>
     <string name="switches_in_window_summary">On, the stow toggle opens the switches as a window even when the row could hold them; off, it only does that when they would not fit</string>
+    <string name="candidates_right_buttons">Corner buttons</string>
+    <string name="candidates_right_buttons_summary">Which buttons the row\'s trailing slot carries. One is shown on its own; two or more fold into the stow toggle; none hides the slot</string>
+    <string name="right_buttons_none">Not shown</string>
+    <string name="right_buttons_selected">Shown: %1$s</string>
+    <string name="right_buttons_separator">", "</string>
+    <string name="right_button_hide">Hide keyboard</string>
+    <string name="right_button_clipboard">Clipboard</string>
+    <string name="right_button_mode_switch">Chinese / English</string>
+    <string name="right_button_floating">Floating keyboard</string>
+    <string name="right_button_hide_input_bar">Input bar</string>
+    <string name="right_button_candidates_window">Candidate window</string>
     <string name="toolbar_show_buttons">Show toolbar buttons</string>
     <string name="toolbar_hide_buttons">Hide toolbar buttons</string>
     <string name="hide_key_symbol">Hide key symbol</string>

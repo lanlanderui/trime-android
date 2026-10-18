@@ -168,14 +168,19 @@ class InputBarDelegate(override val di: DI) :
             // The bottom strip's IME toggles live here now: they are quick switches, reached the
             // same way the clipboard and the input-mode key are, instead of a row of their own
             // along the bottom edge of the keyboard.
-            buttonsUi.addButton(
-                commandButton(R.drawable.ic_baseline_arrow_drop_down_24, "switch_hide_input_bar", R.string.toggle_input_bar),
-                null,
-            )
-            buttonsUi.addButton(
-                commandButton(R.drawable.ic_baseline_list_alt_24, "switch_candidates_window", R.string.toggle_candidates_window),
-                null,
-            )
+            val chosen = RightButton.parse(prefs.candidates.rightButtons.getValue())
+            if (RightButton.HIDE_INPUT_BAR in chosen) {
+                buttonsUi.addButton(
+                    commandButton(R.drawable.ic_baseline_arrow_drop_down_24, "switch_hide_input_bar", R.string.toggle_input_bar),
+                    null,
+                )
+            }
+            if (RightButton.CANDIDATES_WINDOW in chosen) {
+                buttonsUi.addButton(
+                    commandButton(R.drawable.ic_baseline_list_alt_24, "switch_candidates_window", R.string.toggle_candidates_window),
+                    null,
+                )
+            }
             hideKeyboardButton.apply {
                 setOnClickListener { service.requestHideSelf(0) }
                 onSwipe = swipeDownHideKeyboardCallback
@@ -260,6 +265,16 @@ class InputBarDelegate(override val di: DI) :
      */
     private val monitorCandidateUi by lazy {
         val (flankWidth, flankHeight) = alwaysUi.buttonsUi.getButtonSize(theme.toolBar.primaryButton)
+        // Exactly one switch left: it is shown in the trailing slot on its own, and the stow
+        // toggle -- whose whole job is folding a row of them away -- has nothing left to fold.
+        // The button keeps its view and listener; only its parent changes.
+        val singleSwitch = alwaysUi.buttonsUi.root.let { bar ->
+            if (bar.childCount == 1) {
+                (bar.getChildAt(0) as? ToolButton)?.let { alwaysUi.detachButton(it) }
+            } else {
+                null
+            }
+        }
         MonitorCandidateUi(
             context,
             scope,
@@ -274,6 +289,7 @@ class InputBarDelegate(override val di: DI) :
                 // own list, rather than letting them squeeze each other into unreadable slivers.
                 windowManager.attachWindow(QuickSwitchWindow(di) { alwaysUi.buttonsUi.root })
             },
+            singleSwitch = singleSwitch,
         ).apply {
             unrollButton.apply {
                 onSwipe = swipeDownHideKeyboardCallback

@@ -55,6 +55,25 @@ class BuiltinColorPreviewView
         /** The keyboard's own corner/border, or null when it leaves them to the style. */
         private var keyboardRoundCorner: Float? = null
         private var keyboardKeyBorder: Int? = null
+
+        /**
+         * Height of one key row on the real keyboard, in pixels; 0 when unknown.
+         *
+         * The preview is a fraction of the keyboard's size, but dp values are not: a 12 dp corner
+         * drawn literally on a 16 dp-high preview key turns it into a pill, while the same key on
+         * the keyboard is a rounded rectangle. Scaling every dp by the row-height ratio is what
+         * makes the shapes agree.
+         */
+        private var referenceRowHeightPx = 0f
+
+        /**
+         * The real keyboard's height-to-width ratio, or 0 when unknown.
+         *
+         * The preview keeps the keyboard's proportions instead of a fixed guess: a theme can be
+         * short and wide or tall and narrow, and a preview that always comes out squat is exactly
+         * the "this is not my keyboard" the preview exists to avoid.
+         */
+        private var keyboardAspect = 0f
         private var roundCorner = 5f
         private var keyBorder = 0
         private var shadowRadiusDip = 0f
@@ -79,6 +98,38 @@ class BuiltinColorPreviewView
             rows = keyboard?.let { previewRows(it, presetLabels) }.orEmpty()
             keyboardRoundCorner = keyboard?.roundCorner?.takeIf { it >= 0f }
             keyboardKeyBorder = keyboard?.keyBorder?.takeIf { it >= 0 }
+            // Nothing to compare against: the theme config carries no rendered row height, so the
+            // dp values are drawn as they are.
+            referenceRowHeightPx = 0f
+            pressedLetter = findKey(matching = { index, key -> index > 0 && key.letter })
+            pressedFunction = findKey(matching = { _, key -> !key.letter })
+            toggledKey =
+                findKey { _, key ->
+                    key.label.lowercase().let { it == "shift" || it == "caps" || it == "\u21e7" }
+                }
+            requestLayout()
+            invalidate()
+        }
+
+        /**
+         * Sets the preview to the keyboard that is actually on screen.
+         *
+         * [referenceRowHeightPx] is that keyboard's own row height, which is what lets the
+         * preview draw the theme's corners and borders at the size they are on the keyboard
+         * rather than at their literal dp size. See [referenceRowHeightPx].
+         */
+        internal fun setKeyboard(
+            rows: List<PreviewRow>,
+            roundCorner: Float?,
+            keyBorder: Int?,
+            referenceRowHeightPx: Int,
+            aspect: Float = 0f,
+        ) {
+            this.rows = rows
+            keyboardRoundCorner = roundCorner
+            keyboardKeyBorder = keyBorder
+            this.referenceRowHeightPx = referenceRowHeightPx.toFloat()
+            keyboardAspect = aspect
             pressedLetter = findKey(matching = { index, key -> index > 0 && key.letter })
             pressedFunction = findKey(matching = { _, key -> !key.letter })
             toggledKey =
@@ -133,7 +184,7 @@ class BuiltinColorPreviewView
             // phone: on a tablet the uncapped height came to more than half the display, which is
             // the opposite of a thumbnail. A preview that crowds out the list it exists to explain
             // is worse than a slightly squat one.
-            val height = minOf(width * 0.58f, dp(MAX_HEIGHT_DP))
+            val height = minOf(width * (keyboardAspect.takeIf { it in 0.3f..1.6f } ?: DEFAULT_ASPECT), dp(MAX_HEIGHT_DP))
             setMeasuredDimension(width, height.toInt())
         }
 
@@ -343,12 +394,24 @@ class BuiltinColorPreviewView
                     Color.TRANSPARENT,
                 )
 
-            val radius = dp(roundCorner.coerceIn(0f, 24f))
+            val keyHeightPx = bottom - top
+            // Scale every dp by how much shorter this key is than the keyboard's own row, so a
+            // corner that is a third of a key there stays a third of a key here.
+            val shapeScale =
+                if (referenceRowHeightPx > 0f && keyHeightPx > 0f) {
+                    (keyHeightPx / referenceRowHeightPx).coerceIn(0.08f, 2f)
+                } else {
+                    1f
+                }
+            val radius =
+                (dp(roundCorner.coerceIn(0f, 24f)) * shapeScale)
+                    .coerceAtMost(keyHeightPx / 2f)
             fill.color = foreground
             canvas.drawRoundRect(left, top, right, bottom, radius, radius, fill)
             if (keyBorder > 0) {
                 stroke.color = borderColor
-                stroke.strokeWidth = keyBorder.coerceAtMost(3).toFloat() * density
+                stroke.strokeWidth =
+                    (keyBorder.coerceAtMost(3) * density * shapeScale).coerceAtLeast(1f)
                 canvas.drawRoundRect(left, top, right, bottom, radius, radius, stroke)
             }
 
@@ -464,5 +527,8 @@ class BuiltinColorPreviewView
 
             /** The tallest the preview may be, in dp — see [onMeasure]. */
             const val MAX_HEIGHT_DP = 240f
+
+            /** Height-to-width ratio assumed when the real keyboard's is unknown. */
+            const val DEFAULT_ASPECT = 0.58f
         }
     }

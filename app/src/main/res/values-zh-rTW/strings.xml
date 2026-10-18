@@ -155,6 +155,8 @@
     <string name="custom_sound_effect_enabled">使用自訂按鍵音</string>
     <string name="enable_landscape_mode">啟用橫屏模式</string>
     <string name="split_space_percent">自動分割鍵盤比例</string>
+    <string name="keyboard_bottom_height">底部留白高度</string>
+    <string name="keyboard_bottom_height_summary">0 跟隨主題的 keyboard_padding_bottom；數值越大，按鍵下方留出的空白越高。懸浮鍵盤時至少保留 36dp 給拖曳手柄。</string>
     <string name="floating_keyboard">懸浮鍵盤</string>
     <string name="floating_keyboard_summary">將鍵盤顯示為可移動卡片。拖曳左下角控點或以雙指拖曳可移動鍵盤，雙擊控點恢復預設位置，拖曳右下角可調整大小。</string>
     <string name="floating_preedit_offset_x">編碼區水平位置（0% 最左 · 100% 最右）</string>
@@ -250,6 +252,17 @@
     <string name="corner_toggles_composing_summary">關閉後，輸入過程中隱藏左上角的選單鍵與右上角的折疊鍵，把整條寬度留給候選詞</string>
     <string name="switches_in_window">開關總是彈窗展開</string>
     <string name="switches_in_window_summary">開啟後，點右上角的折疊鍵總是彈出開關視窗，即使一行放得下</string>
+    <string name="candidates_right_buttons">右上角按鈕</string>
+    <string name="candidates_right_buttons_summary">選擇行尾這一位置放哪些按鈕：只選一個時直接顯示它，兩個以上收進折疊開關，一個都不選則空出這個位置</string>
+    <string name="right_buttons_none">不顯示</string>
+    <string name="right_buttons_selected">已顯示：%1$s</string>
+    <string name="right_buttons_separator">、</string>
+    <string name="right_button_hide">關閉鍵盤</string>
+    <string name="right_button_clipboard">剪貼簿</string>
+    <string name="right_button_mode_switch">中英文</string>
+    <string name="right_button_floating">懸浮鍵盤</string>
+    <string name="right_button_hide_input_bar">收起輸入列</string>
+    <string name="right_button_candidates_window">候選窗開關</string>
     <string name="toolbar_show_buttons">展開工具列按鈕</string>
     <string name="toolbar_hide_buttons">收起工具列按鈕</string>
     <string name="hide_key_symbol">隱藏按鍵符號</string>

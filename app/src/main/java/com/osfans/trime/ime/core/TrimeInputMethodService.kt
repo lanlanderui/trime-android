@@ -137,9 +137,11 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         prefs.preeditAppearance.backColor,
         prefs.preeditAppearance.backOpacity,
         prefs.keyboard.expandKeypressArea,
+        prefs.keyboard.bottomHeight,
         prefs.keyboard.hideKeySymbol,
         prefs.keyboard.hideKeyHint,
         prefs.keyboard.hideInputBar,
+        prefs.candidates.rightButtons,
         prefs.advanced.ignoreSystemGestureInsets,
     )
 

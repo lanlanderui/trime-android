@@ -9,6 +9,7 @@ package com.osfans.trime.ui.main.settings.theme
 import com.osfans.trime.data.theme.model.KeyActionToken
 import com.osfans.trime.data.theme.model.TextKeyboard
 import com.osfans.trime.ime.keyboard.KeyBehavior
+import com.osfans.trime.ime.keyboard.Keyboard
 
 /** One key of the preview: what it looks like and which palette it draws from. */
 internal data class PreviewKey(
@@ -30,6 +31,43 @@ internal data class PreviewKey(
 )
 
 internal data class PreviewRow(val keys: List<PreviewKey>)
+
+/**
+ * The keyboard that is actually on screen, as rows.
+ *
+ * Stronger than [previewRows] over the theme's own config in two ways. It answers *which* preset
+ * keyboard is in use — the theme's `default` is only the one the IME starts on, and a schema, a
+ * rotation or an explicit switch may have replaced it. And the rows are the renderer's own: the
+ * live [Keyboard] has already broken the flat key list into rows, applied the default widths and
+ * resolved each key's colours, so there is no second copy of that logic to drift.
+ *
+ * Widths here are pixels rather than theme units; [PreviewRow] only ever uses them as a share of
+ * their own row, which is the same relationship either way.
+ */
+internal fun previewRows(
+    keyboard: Keyboard,
+    presetLabels: Map<String, String> = emptyMap(),
+): List<PreviewRow> =
+    keyboard.keys
+        .filter { it.width > 0 }
+        .groupBy { it.row }
+        .toSortedMap()
+        .values
+        .map { keys ->
+            PreviewRow(
+                keys.map { key ->
+                    val config = key.config
+                    val click = config?.behaviors?.get(KeyBehavior.CLICK)
+                    PreviewKey(
+                        weight = key.width.toFloat(),
+                        label = if (config != null) previewLabel(config, click, presetLabels) else "",
+                        symbol = config?.labelSymbol.orEmpty(),
+                        colorKey = config?.keyBackColor?.takeIf { it.isNotEmpty() },
+                        letter = previewIsLetterKey(click),
+                    )
+                },
+            )
+        }
 
 /**
  * The theme's keyboard as rows, ready to be drawn.

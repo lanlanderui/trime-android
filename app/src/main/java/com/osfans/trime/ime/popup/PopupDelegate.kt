@@ -34,6 +34,14 @@ class PopupDelegate(override val di: DI) : DIAware {
     private val dismissJobs = HashMap<Int, Job>()
     private val freeEntryUi = LinkedList<PopupEntryUi>()
 
+    /**
+     * Entries whose fade-out is running.
+     *
+     * They stay in [showingEntryUi] until the animation ends, so a key pressed again within the
+     * fade reuses the very same view instead of stacking a second popup on top of a dying one.
+     */
+    private val fadingEntryUi = HashSet<PopupEntryUi>()
+
     private val showingContainerUi = HashMap<Int, PopupContainerUi>()
 
     private val popupBottomMargin by lazy {
@@ -74,9 +82,10 @@ class PopupDelegate(override val di: DI) : DIAware {
 
     private fun showPopup(viewId: Int, content: String, bounds: Rect) {
         showingEntryUi[viewId]?.apply {
-            dismissJobs[viewId]?.also {
-                dismissJobs.remove(viewId)?.cancel()
-            }
+            dismissJobs.remove(viewId)?.cancel()
+            // A popup that was on its way out comes back instead of being replaced: the view is
+            // still on screen for the length of the fade, and a second one would land on top of it.
+            reveal()
             lastShowTime = System.currentTimeMillis()
             setText(content)
             return
@@ -90,6 +99,17 @@ class PopupDelegate(override val di: DI) : DIAware {
         }
         placePopup(popup, bounds)
         showingEntryUi[viewId] = popup
+        // Fade in rather than appear: the popup sits above the finger, and a hard cut reads as a
+        // flash. Short enough that it is still there by the time the key is released.
+        popup.root.alpha = 0f
+        popup.root.animate().alpha(1f).setDuration(POPUP_FADE_IN_MS).start()
+    }
+
+    /** Brings an entry fully back, cancelling a fade-out that may be running. */
+    private fun PopupEntryUi.reveal() {
+        root.animate().cancel()
+        fadingEntryUi.remove(this)
+        root.alpha = 1f
     }
 
     private fun placePopup(ui: PopupEntryUi, bounds: Rect) {
@@ -178,9 +198,19 @@ class PopupDelegate(override val di: DI) : DIAware {
     }
 
     private fun dismissPopupEntry(viewId: Int, popup: PopupEntryUi) {
-        showingEntryUi.remove(viewId)
-        root.removeView(popup.root)
-        freeEntryUi.add(popup)
+        // The map keeps the entry until the fade ends; see [fadingEntryUi].
+        if (!fadingEntryUi.add(popup)) return
+        popup.root.animate().cancel()
+        popup.root.animate()
+            .alpha(0f)
+            .setDuration(POPUP_FADE_OUT_MS)
+            .withEndAction {
+                fadingEntryUi.remove(popup)
+                if (showingEntryUi[viewId] === popup) showingEntryUi.remove(viewId)
+                popup.root.alpha = 1f
+                root.removeView(popup.root)
+                if (!freeEntryUi.contains(popup)) freeEntryUi.add(popup)
+            }.start()
     }
 
     fun dismissAll() {
@@ -196,10 +226,14 @@ class PopupDelegate(override val di: DI) : DIAware {
         showingContainerUi.clear()
         // too too
         showingEntryUi.forEach { (_, entry) ->
+            entry.root.animate().cancel()
+            fadingEntryUi.remove(entry)
+            entry.root.alpha = 1f
             root.removeView(entry.root)
-            freeEntryUi.add(entry)
+            if (!freeEntryUi.contains(entry)) freeEntryUi.add(entry)
         }
         showingEntryUi.clear()
+        fadingEntryUi.clear()
     }
 
     /** Re-applies the scheme colors to all popups, pooled or showing. */
@@ -220,5 +254,13 @@ class PopupDelegate(override val di: DI) : DIAware {
                 is PopupAction.TriggerAction -> outAction = triggerFocused(viewId)
             }
         }
+    }
+
+    private companion object {
+        /** Length of the character popup's fade-in, in milliseconds. */
+        const val POPUP_FADE_IN_MS = 90L
+
+        /** Length of its fade-out, in milliseconds. */
+        const val POPUP_FADE_OUT_MS = 110L
     }
 }

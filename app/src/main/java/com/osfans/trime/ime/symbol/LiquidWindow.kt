@@ -122,12 +122,14 @@ class LiquidWindow(di: DI) :
 
     private fun triggerSymbolInput(symbol: String) {
         rime.launchOnReady {
-            val (isAsciiMode, isAsciiPunch) = it.statusCached.run { isAsciiMode to isAsciiPunct }
+            // 符号要按主题定义的原样输出：中文模式下不带上「英文标点」与「半角标点」两个开关，
+            // 否则 ascii_punct 开着时挑中的全角符号会被改成半角。
+            val (isAsciiMode, isAsciiPunct) = it.statusCached.run { isAsciiMode to isAsciiPunct }
             if (isAsciiMode) it.setRuntimeOption("ascii_mode", false)
-            if (isAsciiPunch) it.setRuntimeOption("ascii_punch", false)
+            if (isAsciiPunct) it.setRuntimeOption("ascii_punct", false)
             it.clearComposition()
             it.simulateKeySequence(symbol)
-            if (isAsciiPunch) it.setRuntimeOption("ascii_punch", true)
+            if (isAsciiPunct) it.setRuntimeOption("ascii_punct", true)
             ContextCompat.getMainExecutor(service).execute {
                 windowManager.attachWindow(KeyboardWindow)
             }

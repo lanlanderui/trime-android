@@ -5,6 +5,8 @@
 
 package com.osfans.trime.ui.main.settings
 
+import androidx.preference.DialogPreference
+import androidx.preference.PreferenceScreen
 import com.osfans.trime.R
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.prefs.PrefSection
@@ -29,6 +31,7 @@ class KeyboardLayoutFragment : PreferenceDelegateFragment(
                     AppPrefs.Keyboard.FLOATING_KEYBOARD,
                     AppPrefs.Keyboard.LANDSCAPE_MODE,
                     AppPrefs.Keyboard.SPLIT_SPACE_PERCENT,
+                    AppPrefs.Keyboard.BOTTOM_HEIGHT,
                     AppPrefs.Keyboard.USE_SOFT_CURSOR,
                 ),
             ),
@@ -44,4 +47,11 @@ class KeyboardLayoutFragment : PreferenceDelegateFragment(
         // shown by the other two, so they must not be appended here.
         includeUnlisted = false,
     ),
-)
+) {
+    override fun onPreferenceUiCreated(screen: PreferenceScreen) {
+        // The row is a slider whose only label is its value; the dialog is where the number can be
+        // explained, and where "0 = follow the theme" is worth saying out loud.
+        screen.findPreference<DialogPreference>(AppPrefs.Keyboard.BOTTOM_HEIGHT)
+            ?.setDialogMessage(R.string.keyboard_bottom_height_summary)
+    }
+}
