@@ -179,7 +179,9 @@ class KeyboardWindow(di: DI) :
         lastKeyboardId = target
 
         val config = selectKeyboardConfig(target)
-        val keyboard = activeKeyboard ?: Keyboard(context, theme, computeAllowedWidth(), config)
+        // `target` is the layout's name, which is what the per-key colours are filed under — the
+        // editor writes them by that name and the keyboard has to look them up by the same one.
+        val keyboard = activeKeyboard ?: Keyboard(context, theme, computeAllowedWidth(), config, target)
         val view = currentKeyboardView ?: KeyboardView(context, theme, keyboard, popup, service, keyboardActionListener, enterKeyDisplay)
 
         if (activeKeyboard == null) {
@@ -303,6 +305,16 @@ class KeyboardWindow(di: DI) :
 
     /** Repaints the keyboard after a color-scheme switch; keys re-resolve their colors. */
     override fun refreshColors() {
+        currentKeyboardView?.invalidateAllKeys()
+    }
+
+    /**
+     * Repaints the keys after the glass strength changed.
+     *
+     * Nothing is rebuilt: each cap reads the strength and re-bakes its own gradients while it
+     * draws, so the keys only have to be told to draw again.
+     */
+    fun refreshGlassStrength() {
         currentKeyboardView?.invalidateAllKeys()
     }
 

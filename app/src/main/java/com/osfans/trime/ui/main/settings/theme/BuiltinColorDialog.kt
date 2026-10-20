@@ -51,6 +51,7 @@ internal object BuiltinColorDialog {
         onPicked: (String) -> Unit,
         onFollowScheme: (() -> Unit)?,
         @StringRes followLabelRes: Int = R.string.builtin_color_follow_scheme,
+        onPreview: ((String) -> Unit)? = null,
     ): AlertDialog {
         val hsv = FloatArray(3)
         Color.colorToHSV(current, hsv)
@@ -161,11 +162,22 @@ internal object BuiltinColorDialog {
             bars.forEach { (bar, channel) -> bar.applyTrack(channel.stops(), context) }
         }
 
+        /**
+         * Whether the initial state has been pushed into the widgets yet.
+         *
+         * The first [refresh] is that initial push — it runs before the dialog is shown, and it is
+         * not a change the user made. Reporting it as a preview would have the keyboard repaint
+         * once with the colour it already had, and, worse, would make a screen that shows a live
+         * preview revert an unsaved edit the moment the dialog opened.
+         */
+        var userHasChanged = false
+
         fun refresh() {
             preview.background = swatch(color(), context)
             // Never fight the user's cursor: only rewrite the field while it is not being edited.
             if (!hexField.hasFocus()) hexField.setText(argbToHex(color()))
             rebuildTracks()
+            if (userHasChanged) onPreview?.invoke(argbToHex(color()))
         }
 
         bars.forEach { (bar, channel) ->
@@ -178,6 +190,7 @@ internal object BuiltinColorDialog {
                     ) {
                         if (!fromUser) return
                         channel.write(progress)
+                        userHasChanged = true
                         refresh()
                     }
 
@@ -197,6 +210,7 @@ internal object BuiltinColorDialog {
             // than silently clearing it to transparent.
             if (Color.alpha(parsed) != 0) alpha = Color.alpha(parsed)
             syncBars()
+            userHasChanged = true
             refresh()
         }
 

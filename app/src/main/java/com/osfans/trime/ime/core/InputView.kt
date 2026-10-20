@@ -47,6 +47,8 @@ import com.osfans.trime.ime.candidates.popup.PopupCandidatesMode
 import com.osfans.trime.ime.composition.PreeditDelegate
 import com.osfans.trime.ime.keyboard.CommonKeyboardActionListener
 import com.osfans.trime.ime.keyboard.KeyboardPrefs.isLandscapeMode
+import com.osfans.trime.ime.keyboard.FrostedBackdrop
+import com.osfans.trime.ime.keyboard.GlassPanelView
 import com.osfans.trime.ime.keyboard.KeyboardWindow
 import com.osfans.trime.ime.popup.PopupDelegate
 import com.osfans.trime.ime.symbol.LiquidWindow
@@ -570,6 +572,14 @@ class InputView(
         imageView {
             scaleType = ImageView.ScaleType.CENTER_CROP
         }
+
+    /**
+     * The frosted-glass veneer: a sheen, grain and a lit top edge over the back colour.
+     *
+     * It sits between [keyboardBackground] and everything else, so the panel gets the material
+     * and the keys still draw on top of it. See [com.osfans.trime.ime.keyboard.KeyboardGlass].
+     */
+    private val glassVeneer = GlassPanelView(context)
     private val placeholderListener = OnClickListener { }
 
     private val leftPaddingSpace =
@@ -1167,6 +1177,11 @@ class InputView(
         inputBar.refreshCornerToggles()
     }
 
+    /** Re-applies whether the strip starts on the switches after that switch changed. */
+    fun refreshSwitchesDefault() {
+        inputBar.refreshSwitchesDefault()
+    }
+
     /** Re-sizes the input bar after the strip-to-keyboard gap changed. */
     fun refreshStripGap() {
         inputBar.refreshStripGap()
@@ -1177,13 +1192,25 @@ class InputView(
         inputBar.refreshTwoRow()
     }
 
+    /**
+     * Repaints the frosted veneer after its strength changed.
+     *
+     * Both halves read the strength while they draw and re-bake their gradients there, so neither
+     * the view tree nor the keyboard is rebuilt: the panel is invalidated directly, and the key
+     * caps through the window that owns them.
+     */
+    fun refreshGlassStrength() {
+        glassVeneer.invalidate()
+        keyboardWindow.refreshGlassStrength()
+    }
+
     private fun configureFloatingSurface(enabled: Boolean) {
         val surface = keyboardView as FloatingKeyboardContainer
         if (enabled) {
             surface.background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(24f)
-                setColor(scope.colors.keyboardBackColor)
+                setColor(keyboardPanelColor)
             }
             surface.clipToOutline = true
             surface.elevation = dp(FLOATING_KEYBOARD_ELEVATION_DP)
@@ -1304,18 +1331,74 @@ class InputView(
      * built and then removed (2026-10-14) — the platform only blurs the whole IME window, which
      * would frost the app content above the keyboard along with the panel. Should that ever
      * change, this is the only place that needs to know.
+     *
+     * The frosted-backdrop switch is the other way to use that fact: it drops the colour to a
+     * translucent pane and blurs the theme's own background image before drawing it ([FrostedBackdrop]).
      */
     private fun applyKeyboardBackdrop() {
-        keyboardBackground.background =
-            GradientDrawable().apply { setColor(scope.colors.keyboardBackColor) }
-        keyboardBackground.imageDrawable = scope.drawable("keyboard_background")
+        val backColor = scope.colors.keyboardBackColor
+        val frosted = keyboardPrefs.glassBackdrop.getValue()
+        val strength = if (frosted) FrostedBackdrop.strength() else 0f
+        val image = scope.drawable("keyboard_background")
+
+        if (!frosted) {
+            keyboardBackground.background = GradientDrawable().apply { setColor(backColor) }
+            keyboardBackground.imageDrawable = image
+            return
+        }
+
+        // The pane is painted here, under the bar and the keys, and not on the veneer above them:
+        // the veneer used to carry it and the candidate text came out washed out, because a 72 %
+        // sheet of colour was drawn over the very glyphs it was supposed to sit behind.
+        if (image != null) {
+            // The drawable fills its own buffer with the pane colour, so it is the whole backdrop:
+            // one layer, one opacity, blurred image on top of the tint.
+            keyboardBackground.background = null
+            keyboardBackground.imageDrawable = FrostedBackdrop.drawable(
+                source = image,
+                baseColor = backColor,
+                density = resources.displayMetrics.density,
+                strength = strength,
+            )
+        } else {
+            // No image to blur: the pane is the colour itself, which is all a solid theme can be.
+            keyboardBackground.background = GradientDrawable().apply {
+                setColor(FrostedBackdrop.tint(backColor, strength))
+            }
+            keyboardBackground.imageDrawable = null
+        }
+    }
+
+    /**
+     * The colour the keyboard panel is painted with.
+     *
+     * Straight from the colour scheme unless the frosted backdrop is on, in which case it is the
+     * translucent pane [FrostedBackdrop] builds from the same colour at the current strength.
+     */
+    private val keyboardPanelColor: Int
+        get() = if (keyboardPrefs.glassBackdrop.getValue()) {
+            FrostedBackdrop.tint(scope.colors.keyboardBackColor, FrostedBackdrop.strength())
+        } else {
+            scope.colors.keyboardBackColor
+        }
+
+    /** Re-applies the panel's surface after the frosted-backdrop switch changed, without a rebuild. */
+    fun refreshKeyboardBackdrop() {
+        applyKeyboardBackdrop()
+        if (isFloatingKeyboardEnabled) {
+            (keyboardView.background as? GradientDrawable)?.setColor(keyboardPanelColor)
+        }
+        // The bar's own fill follows the pane, so it has to be rebuilt with it.
+        inputBar.refreshColors()
+        resizeHandle.setGripColor(scope.colors.keyboardBackColor)
+        moveHandle.setGripColor(scope.colors.keyboardBackColor)
     }
 
     /** Restyles colors after a scheme switch without rebuilding the view tree. */
     fun refreshColors() {
         applyKeyboardBackdrop()
         if (isFloatingKeyboardEnabled) {
-            (keyboardView.background as? GradientDrawable)?.setColor(scope.colors.keyboardBackColor)
+            (keyboardView.background as? GradientDrawable)?.setColor(keyboardPanelColor)
         }
         applyBottomBar()
         resizeHandle.setGripColor(scope.colors.keyboardBackColor)
@@ -1354,6 +1437,14 @@ class InputView(
                         topOfParent()
                         centerHorizontally()
                     },
+                )
+                // Above the bar, below the keys: the veneer is one surface, so the frosted pane and
+                // the grain cover the candidate strip and the tool row instead of stopping where
+                // the bar's own background begins. Nothing here takes touch: the layer is neither
+                // clickable nor focusable, so the bar keeps its own taps and ripples.
+                add(
+                    glassVeneer,
+                    lParams(matchParent, matchParent),
                 )
                 add(
                     leftPaddingSpace,

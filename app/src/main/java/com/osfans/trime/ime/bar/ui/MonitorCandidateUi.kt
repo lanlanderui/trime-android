@@ -23,6 +23,7 @@ import com.osfans.trime.R
 import com.osfans.trime.data.prefs.AppPrefs
 import com.osfans.trime.data.theme.Theme
 import com.osfans.trime.data.theme.ThemeScope
+import com.osfans.trime.ime.keyboard.FrostedBackdrop
 import com.osfans.trime.ime.keyboard.KeyBehavior
 import com.osfans.trime.util.roundedRippleDrawable
 import splitties.dimensions.dp
@@ -100,6 +101,7 @@ class MonitorCandidateUi(
     private val stripGapDp = AppPrefs.defaultInstance().candidates.stripGap
     private val cornerToggles = AppPrefs.defaultInstance().candidates.cornerTogglesWhileComposing
     private val switchesInWindow = AppPrefs.defaultInstance().candidates.switchesInWindow
+    private val switchesDefaultOpen = AppPrefs.defaultInstance().candidates.switchesDefaultOpen
 
     val privacyButton =
         ToolButton(ctx, R.drawable.ic_baseline_lock_24, scope).apply {
@@ -117,6 +119,10 @@ class MonitorCandidateUi(
             "candidate_border_color",
             ctx.dp(theme.generalStyle.candidateBorder),
             ctx.dp(theme.generalStyle.candidateBorderRound),
+            // Frosted, the bar belongs to the pane too: its fill follows the pane's opacity, so the
+            // two surfaces fade together instead of the strip staying solid under a glass roof.
+            // Zero strength (switch off, or the slider at 0 %) yields 255 and changes nothing.
+            alpha = FrostedBackdrop.alpha(FrostedBackdrop.strength()),
         )
 
     /**
@@ -225,6 +231,24 @@ class MonitorCandidateUi(
     private var switchFadeToken = 0
 
     /**
+     * Whether the strip should come up on the switches rather than on the candidates.
+     *
+     * The preference only says what the user wants; the row has the last word, because a strip
+     * with nothing in it has nothing to open. That is the same condition [applyEndSlot] uses to
+     * drop the toggle -- the single switch has already been re-parented into the trailing slot,
+     * leaving the switches bar empty, and selecting no buttons at all leaves it empty as well.
+     *
+     * Opening them by default is skipped when the switches are meant to come up as a window
+     * anyway: that preference is the user asking for them *out* of the strip, and leaving them
+     * laid out in it would give the two settings contradictory answers.
+     */
+    private fun switchesOpenByDefault(): Boolean {
+        if (!switchesDefaultOpen.getValue() || switchesInWindow.getValue()) return false
+        val bar = switchesBar as? ViewGroup ?: return false
+        return bar.childCount > 0
+    }
+
+    /**
      * The row's end slot, as two views that never show at once: the expand toggle while a
      * composition is running, the stow toggle when the row is idle.
      *
@@ -243,7 +267,15 @@ class MonitorCandidateUi(
         this.composing = composing
         // The switches row is reachable only through the stow toggle, which is not on screen while
         // typing -- so typing takes the row back to the candidates rather than leaving it stranded.
-        if (composing && switchesShown) setSwitchesShown(false)
+        // Ending the composition hands the row back to the preference instead: a row that starts
+        // open comes back open. Only when the preference says open, though -- with it off the
+        // user's own last flip is left where they put it.
+        if (composing) {
+            if (switchesShown) setSwitchesShown(false)
+        } else if (switchesDefaultOpen.getValue()) {
+            val open = switchesOpenByDefault()
+            if (open != switchesShown) setSwitchesShown(open)
+        }
         val hasCorners = !composing || cornerToggles.getValue()
         // The only moment the strip changes width is when the corner toggles step aside, which is
         // the state "hide the corner toggles while composing" describes. Animating it is what turns
@@ -352,6 +384,18 @@ class MonitorCandidateUi(
     /** Re-applies the corner toggles after their switch changed, without a rebuild. */
     fun refreshCornerToggles() {
         applyEndSlot()
+    }
+
+    /**
+     * Re-applies the row's default state after its switch changed, without a rebuild.
+     *
+     * Mid-composition there is nothing to apply: the row owes the candidates while typing, and
+     * [setComposing] reads the preference again when the composition ends.
+     */
+    fun refreshSwitchesDefault() {
+        if (composing) return
+        val open = switchesOpenByDefault()
+        if (open != switchesShown) setSwitchesShown(open)
     }
 
     /**
@@ -502,10 +546,10 @@ class MonitorCandidateUi(
         // The single switch (if the setting leaves one) has to be in place before the slot is
         // applied, since the slot decides its visibility.
         attachSingleSwitch()
-        // The strip belongs to the candidates until the toggle is asked for the switches. The
-        // first assignment is not a flip, so it does not fade -- at build time both layers would
-        // be on screen for the length of an animation nobody asked for.
-        setSwitchesShown(false, animate = false)
+        // The strip belongs to the candidates unless the preference asks for the switches first.
+        // The first assignment is not a flip, so it does not fade -- at build time both layers
+        // would be on screen for the length of an animation nobody asked for.
+        setSwitchesShown(switchesOpenByDefault(), animate = false)
         applyEndSlot()
         // The strip can shrink under an open switches row (rotation, or a shorter length in the
         // settings). The row was opened when it still fit, so it has to give way again rather than

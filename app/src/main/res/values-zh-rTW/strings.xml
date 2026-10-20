@@ -252,6 +252,8 @@
     <string name="corner_toggles_composing_summary">關閉後，輸入過程中隱藏左上角的選單鍵與右上角的折疊鍵，把整條寬度留給候選詞</string>
     <string name="switches_in_window">開關總是彈窗展開</string>
     <string name="switches_in_window_summary">開啟後，點右上角的折疊鍵總是彈出開關視窗，即使一行放得下</string>
+    <string name="switches_default_open">預設展開開關</string>
+    <string name="switches_default_open_summary">開啟後，未輸入時行內直接顯示右上角選中的按鈕，不用先點折疊鍵；輸入時仍切回候選詞，一行放不下時仍收進折疊鍵</string>
     <string name="candidates_right_buttons">右上角按鈕</string>
     <string name="candidates_right_buttons_summary">選擇行尾這一位置放哪些按鈕：只選一個時直接顯示它，兩個以上收進折疊開關，一個都不選則空出這個位置</string>
     <string name="right_buttons_none">不顯示</string>

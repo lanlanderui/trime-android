@@ -40,6 +40,10 @@ class KeyboardLayoutFragment : PreferenceDelegateFragment(
                 listOf(
                     AppPrefs.Keyboard.HIDE_KEY_SYMBOL,
                     AppPrefs.Keyboard.HIDE_KEY_HINT,
+                    AppPrefs.Keyboard.GLASS_KEYBOARD,
+                    AppPrefs.Keyboard.GLASS_STRENGTH,
+                    AppPrefs.Keyboard.GLASS_BACKDROP,
+                    AppPrefs.Keyboard.GLASS_BACKDROP_STRENGTH,
                 ),
             ),
         ),
@@ -53,5 +57,11 @@ class KeyboardLayoutFragment : PreferenceDelegateFragment(
         // explained, and where "0 = follow the theme" is worth saying out loud.
         screen.findPreference<DialogPreference>(AppPrefs.Keyboard.BOTTOM_HEIGHT)
             ?.setDialogMessage(R.string.keyboard_bottom_height_summary)
+        // Same for the glass: the percentage means nothing without the two anchors -- 100 % is the
+        // default look, and 0 % is what the switch above already does.
+        screen.findPreference<DialogPreference>(AppPrefs.Keyboard.GLASS_STRENGTH)
+            ?.setDialogMessage(R.string.keyboard_glass_strength_summary)
+        screen.findPreference<DialogPreference>(AppPrefs.Keyboard.GLASS_BACKDROP_STRENGTH)
+            ?.setDialogMessage(R.string.keyboard_glass_backdrop_strength_summary)
     }
 }

@@ -140,6 +140,10 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         prefs.keyboard.bottomHeight,
         prefs.keyboard.hideKeySymbol,
         prefs.keyboard.hideKeyHint,
+        prefs.keyboard.glassKeyboard,
+        prefs.keyboard.glassStrength,
+        prefs.keyboard.glassBackdrop,
+        prefs.keyboard.glassBackdropStrength,
         prefs.keyboard.hideInputBar,
         prefs.candidates.rightButtons,
         prefs.advanced.ignoreSystemGestureInsets,
@@ -179,6 +183,18 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
                 AppPrefs.PreeditAppearance.CORNER_RADIUS,
                 AppPrefs.PreeditAppearance.BACK_COLOR,
                 AppPrefs.PreeditAppearance.BACK_OPACITY -> inputView?.refreshPreeditAppearance()
+
+                // The veneer is painted per draw from this number, so the surfaces only owe a
+                // repaint -- and a repaint is what keeps the keyboard from blinking while the
+                // slider is adjusted.
+                AppPrefs.Keyboard.GLASS_STRENGTH -> inputView?.refreshGlassStrength()
+
+                // The panel's surface is swapped in place: a new background drawable, no rebuild.
+                AppPrefs.Keyboard.GLASS_BACKDROP -> inputView?.refreshKeyboardBackdrop()
+
+                // Same surface, re-baked: the strength reaches the pane's opacity, its tint and the
+                // blur radius, all of which live in the drawable this branch replaces.
+                AppPrefs.Keyboard.GLASS_BACKDROP_STRENGTH -> inputView?.refreshKeyboardBackdrop()
 
                 else -> themeScope?.let { replaceInputView(it) }
             }
@@ -228,6 +244,10 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
             // Hiding the two corner toggles only changes what the strip row shows.
             if (key == AppPrefs.Candidates.CORNER_TOGGLES_COMPOSING) {
                 inputView?.refreshCornerToggles()
+            }
+            // Opening the switches by default only changes which of the strip's two layers is up.
+            if (key == AppPrefs.Candidates.SWITCHES_DEFAULT_OPEN) {
+                inputView?.refreshSwitchesDefault()
             }
         }
 

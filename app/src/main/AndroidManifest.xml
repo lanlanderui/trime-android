@@ -80,7 +80,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
             android:parentActivityName=".ui.main.MainActivity" />
 
         <activity
-            android:name=".ui.main.settings.theme.BuiltinColorsActivity"
+            android:name=".ui.main.settings.theme.KeyColorEditorActivity"
             android:exported="false"
             android:parentActivityName=".ui.main.MainActivity" />
 

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+SPDX-FileCopyrightText: 2015 - 2026 Rime community
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_apply"
+        android:title="@string/builtin_apply"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_import"
+        android:title="@string/builtin_import"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_export"
+        android:title="@string/builtin_export"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_reset"
+        android:title="@string/builtin_reset"
+        app:showAsAction="never" />
+
+</menu>

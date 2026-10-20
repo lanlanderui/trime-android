@@ -5,12 +5,16 @@
 package com.osfans.trime.ime.keyboard
 
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.view.KeyEvent
 import androidx.annotation.ColorInt
 import com.osfans.trime.daemon.RimeDaemon
 import com.osfans.trime.data.theme.ColorManager
 import com.osfans.trime.data.theme.KeyActionManager
+import com.osfans.trime.data.theme.PerKeyColorStore
+import com.osfans.trime.data.theme.PerKeyColors
 import com.osfans.trime.data.theme.model.TextKeyboard
+import com.osfans.trime.util.ColorUtils
 import splitties.bitflags.hasFlag
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
@@ -157,6 +161,35 @@ class Key(
     }
 
     private fun <T> schemeColor(resolve: () -> T) = SchemeColorCache(resolve)
+
+    /**
+     * The colours this one key was given on the keyboard-配色 screen, or null when it follows the
+     * scheme like every other key.
+     *
+     * Cached on the colour generation like every other colour here, so a pick made on that screen
+     * (which bumps the generation) repaints this key on the next frame, in the settings app and in
+     * the IME at once — they are one process.
+     */
+    private val perKeyColors: PerKeyColors? by schemeColor {
+        if (parent.name.isEmpty() || index < 0) null else PerKeyColorStore.get(parent.name, index)
+    }
+
+    /**
+     * A colour the user picked for this key, resolved, or null to fall through to the theme.
+     *
+     * An unparsable string is treated as absent rather than thrown: the value comes out of a JSON
+     * file a user can edit, and a typo there should leave one key themed, not crash the keyboard.
+     */
+    private fun ownColor(raw: String?): Int? =
+        raw?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            runCatching { ColorUtils.parseColor(it) }.getOrNull()
+        }
+
+    /** Whether the pressed state has a colour of its own, falling back to the resting one. */
+    private fun ownStateColor(
+        resting: String?,
+        pressed: String?,
+    ): String? = if (isPressed) pressed ?: resting else resting
 
     /**
      * How far the text shadow bleeds, in dp, and what colour it is.
@@ -397,43 +430,65 @@ class Key(
             }
         }
 
-    fun getBackgroundDrawable(): Drawable? = when (appearanceType) {
-        2 -> if (isPressed) hlOnKeyBackground else onKeyBackground
-
-        1 -> {
-            if (isPressed) {
-                hlOffKeyBackground
-            } else {
-                // The theme's per-key colour, when it is allowed to apply at all: it is not (see
-                // [useThemedKeyColors]), and it is not part of the function palette.
-                selfConfig
-                    ?.takeIf { useThemedKeyColors }
-                    ?.keyBackColor
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let { keyBackground }
-                    ?: offKeyBackground
-            }
+    /**
+     * The key's background.
+     *
+     * A colour the user picked for this key wins over every branch below, including the
+     * function-key one that would otherwise bypass the key's own `key_back_color`: "this key is
+     * red" has to mean this key on the function row too, or the answer to a tap would depend on
+     * which palette the key happens to fall in.
+     */
+    fun getBackgroundDrawable(): Drawable? {
+        ownColor(perKeyColors?.let { ownStateColor(it.back, it.pressedBack) })?.let {
+            return GradientDrawable().apply { setColor(it) }
         }
+        return when (appearanceType) {
+            2 -> if (isPressed) hlOnKeyBackground else onKeyBackground
 
-        else -> if (isPressed) hlKeyBackground else keyBackground
+            1 -> {
+                if (isPressed) {
+                    hlOffKeyBackground
+                } else {
+                    // The theme's per-key colour, when it is allowed to apply at all: it is not (see
+                    // [useThemedKeyColors]), and it is not part of the function palette.
+                    selfConfig
+                        ?.takeIf { useThemedKeyColors }
+                        ?.keyBackColor
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { keyBackground }
+                        ?: offKeyBackground
+                }
+            }
+
+            else -> if (isPressed) hlKeyBackground else keyBackground
+        }
     }
 
-    fun getBorderColor(): Int = when (appearanceType) {
-        2 -> if (isPressed) hlOnKeyBorderColor else onKeyBorderColor
-        1 -> if (isPressed) hlOffKeyBorderColor else themedKeyColor({ keyBorderColor }, offKeyBorderColor)
-        else -> if (isPressed) hlKeyBorderColor else keyBorderColor
+    fun getBorderColor(): Int {
+        ownColor(perKeyColors?.border)?.let { return it }
+        return when (appearanceType) {
+            2 -> if (isPressed) hlOnKeyBorderColor else onKeyBorderColor
+            1 -> if (isPressed) hlOffKeyBorderColor else themedKeyColor({ keyBorderColor }, offKeyBorderColor)
+            else -> if (isPressed) hlKeyBorderColor else keyBorderColor
+        }
     }
 
-    fun getTextColor(): Int = when (appearanceType) {
-        2 -> if (isPressed) hlOnKeyTextColor else onKeyTextColor
-        1 -> if (isPressed) hlOffKeyTextColor else themedKeyColor({ keyTextColor }, offKeyTextColor)
-        else -> if (isPressed) hlKeyTextColor else keyTextColor
+    fun getTextColor(): Int {
+        ownColor(perKeyColors?.let { ownStateColor(it.text, it.pressedText) })?.let { return it }
+        return when (appearanceType) {
+            2 -> if (isPressed) hlOnKeyTextColor else onKeyTextColor
+            1 -> if (isPressed) hlOffKeyTextColor else themedKeyColor({ keyTextColor }, offKeyTextColor)
+            else -> if (isPressed) hlKeyTextColor else keyTextColor
+        }
     }
 
-    fun getSymbolColor(): Int = when (appearanceType) {
-        2 -> if (isPressed) hlOnKeySymbolColor else onKeySymbolColor
-        1 -> if (isPressed) hlOffKeySymbolColor else themedKeyColor({ keySymbolColor }, offKeySymbolColor)
-        else -> if (isPressed) hlKeySymbolColor else keySymbolColor
+    fun getSymbolColor(): Int {
+        ownColor(perKeyColors?.symbol)?.let { return it }
+        return when (appearanceType) {
+            2 -> if (isPressed) hlOnKeySymbolColor else onKeySymbolColor
+            1 -> if (isPressed) hlOffKeySymbolColor else themedKeyColor({ keySymbolColor }, offKeySymbolColor)
+            else -> if (isPressed) hlKeySymbolColor else keySymbolColor
+        }
     }
 }
 

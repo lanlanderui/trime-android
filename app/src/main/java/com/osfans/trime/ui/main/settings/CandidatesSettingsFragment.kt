@@ -51,6 +51,7 @@ class CandidatesSettingsFragment : PreferenceDelegateFragment(
                     R.string.section_candidates_toggles,
                     listOf(
                         AppPrefs.Candidates.RIGHT_BUTTONS,
+                        AppPrefs.Candidates.SWITCHES_DEFAULT_OPEN,
                         AppPrefs.Candidates.CORNER_TOGGLES_COMPOSING,
                         AppPrefs.Candidates.SWITCHES_IN_WINDOW,
                     ),

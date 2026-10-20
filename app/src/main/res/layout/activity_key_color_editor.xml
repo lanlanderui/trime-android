@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+SPDX-FileCopyrightText: 2015 - 2026 Rime community
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    tools:context=".ui.main.settings.theme.KeyColorEditorActivity">
+
+    <include
+        android:id="@+id/editorToolbar"
+        layout="@layout/toolbar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!--
+      The keyboard stays out of the scroll view for the same reason the old preview did: a colour is
+      chosen further down, and the thing the choice is about has to stay visible while it is made.
+      It is also the only part of this screen that is tapped rather than listed.
+    -->
+    <com.osfans.trime.ui.main.settings.theme.KeyColorBoardView
+        android:id="@+id/editorBoard"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/editorToolbar" />
+
+    <HorizontalScrollView
+        android:id="@+id/editorPagesScroll"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:clipToPadding="false"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:scrollbars="none"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/editorBoard">
+
+        <LinearLayout
+            android:id="@+id/editorPages"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <!-- Shown only while keys are picked, so the resting screen is the keyboard and the list. -->
+    <LinearLayout
+        android:id="@+id/editorSelection"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/editorPagesScroll"
+        tools:visibility="visible">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/editorSelectionTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textAppearance="?attr/textAppearanceTitleSmall"
+                tools:text="已选 3 个键" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/editorSelectionReset"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:text="@string/key_colors_clear_keys" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/editorSelectionDone"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:text="@string/key_colors_done" />
+        </LinearLayout>
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipToPadding="false"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/editorSlots"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
+    <!--
+      One tab per domain. They were three sections of a single very long list before, which made
+      "where do I change the key height" a scroll hunt; the domains also have separate sources, so
+      a tab each is how they are already thought about.
+    -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/editorTabs"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorSurface"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/editorSelection"
+        app:tabGravity="fill"
+        app:tabMode="fixed" />
+
+    <ScrollView
+        android:id="@+id/editorScroll"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/editorTabs">
+
+        <LinearLayout
+            android:id="@+id/editorContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="32dp" />
+    </ScrollView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

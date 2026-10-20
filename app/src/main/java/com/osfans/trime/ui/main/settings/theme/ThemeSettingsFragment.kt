@@ -81,11 +81,13 @@ class ThemeSettingsFragment : PreferenceDelegateFragment(
 
     override fun onPreferenceUiCreated(screen: PreferenceScreen) {
         screen.addCategory(R.string.section_advanced_entries) {
+            // One entry, because there is one screen now: colours, sizes and the layout all live
+            // on it, above a keyboard that shows what they do.
             addPreference(
-                R.string.builtin_colors,
-                R.string.builtin_colors_summary,
+                R.string.key_colors_entry,
+                R.string.key_colors_entry_summary,
             ) {
-                startActivity<BuiltinColorsActivity>()
+                startActivity<KeyColorEditorActivity>()
             }
             addPreference(
                 R.string.source_batch_switch,

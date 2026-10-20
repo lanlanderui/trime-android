@@ -66,6 +66,8 @@ class KeyView(
         textAlign = Paint.Align.CENTER
     }
 
+    private val glassCap = KeyGlassCap()
+
     private var cachedIcon: IconicsDrawable? = null
     private var cachedIconName: String? = null
 
@@ -332,6 +334,21 @@ class KeyView(
             height - paddingBottom,
         )
         bg.draw(canvas)
+
+        val glass = KeyboardGlass.strength()
+        if (glass > 0f) {
+            glassCap.draw(
+                canvas = canvas,
+                left = paddingLeft.toFloat(),
+                top = paddingTop.toFloat(),
+                right = (width - paddingRight).toFloat(),
+                bottom = (height - paddingBottom).toFloat(),
+                radius = if (key.roundCorner > 0f) dp(key.roundCorner) else 0f,
+                pressed = keyPressed,
+                density = resources.displayMetrics.density,
+                strength = glass,
+            )
+        }
     }
 
     /**

@@ -234,6 +234,24 @@ object ColorManager {
         activateScheme(notify = true)
     }
 
+    /**
+     * Re-resolves every key after the per-key colours were edited.
+     *
+     * The active scheme is untouched — those colours are a layer above it — so this deliberately
+     * does not go through [activateScheme], whose "unchanged, nothing to notify" shortcut is
+     * exactly the branch that would swallow the change. Bumping the generation is what makes every
+     * [com.osfans.trime.ime.keyboard.Key]'s cached colours resolve again; [fireChange] is what makes
+     * the keyboard on screen repaint.
+     *
+     * Called on every frame of a colour-picker drag, so it must stay cheap: it is one long
+     * increment plus the listeners, and the listeners already coalesce to the main thread.
+     */
+    fun invalidateKeyColors() {
+        if (scope == null) return
+        generation++
+        fireChange()
+    }
+
     private fun requireScope(): ThemeScope = requireNotNull(scope) { "ColorManager is not initialized" }
 
     /**

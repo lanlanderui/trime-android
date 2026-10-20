@@ -23,6 +23,14 @@ class Keyboard(
     private val theme: Theme,
     private val allowedWidth: Int,
     selfConfig: TextKeyboard? = null,
+    /**
+     * The name this keyboard has in the theme's `preset_keyboards`, when it came from there.
+     *
+     * Only the per-key colours need it: a key's position in the layout is what identifies it, and
+     * that position is only meaningful against a named layout. Empty for a keyboard built from a
+     * bare config (the editor's throwaway instance), which simply means no per-key colours.
+     */
+    val name: String = "",
 ) {
 
     /** 按鍵默認水平間距  */

@@ -404,6 +404,11 @@ class InputBarDelegate(override val di: DI) :
         monitorCandidateUi.refreshCornerToggles()
     }
 
+    /** Re-applies whether the strip starts on the switches after that switch changed. */
+    fun refreshSwitchesDefault() {
+        monitorCandidateUi.refreshSwitchesDefault()
+    }
+
     /** Re-sizes the bar after the strip-to-keyboard gap changed; the strip keeps its own height. */
     fun refreshStripGap() {
         view.updateLayoutParams { height = context.dp(themedHeight) }

@@ -153,6 +153,28 @@ class AppPrefs(
             const val USE_SOFT_CURSOR = "use_soft_cursor"
             const val HIDE_INPUT_BAR = "hide_input_bar"
             const val HIDE_KEY_SYMBOL = "hide_key_symbol"
+            const val GLASS_KEYBOARD = "keyboard_glass"
+            const val GLASS_STRENGTH = "keyboard_glass_strength"
+
+            /**
+             * Top of the glass-strength slider, in percent of the tuned look.
+             *
+             * Shared with the veneer that clamps the stored value: past 100 % the alphas are
+             * rebuilt rather than faded, and a hand-edited file must not be able to push them
+             * past opaque, where the gradients would stop reading as a gradient.
+             */
+            const val GLASS_STRENGTH_MAX = 200
+            const val GLASS_BACKDROP = "keyboard_glass_backdrop"
+            const val GLASS_BACKDROP_STRENGTH = "keyboard_glass_backdrop_strength"
+
+            /**
+             * Top of the frosted-backdrop slider, in percent of the tuned look.
+             *
+             * Shared with the pane that clamps the stored value: past 100 % the opacity is computed
+             * rather than faded, and a hand-edited file must not be able to reach a transparency
+             * the keyboard cannot be read through.
+             */
+            const val GLASS_BACKDROP_STRENGTH_MAX = 200
             const val HIDE_KEY_HINT = "hide_key_hint"
 
             const val POPUP_ON_KEY_PRESS = "show_key_popup"
@@ -296,6 +318,83 @@ class AppPrefs(
         val hideInputBar = switch(R.string.hide_input_bar, HIDE_INPUT_BAR, false)
 
         val hideKeySymbol = switch(R.string.hide_key_symbol, HIDE_KEY_SYMBOL, false)
+
+        /**
+         * Frosted-glass veneer over the keyboard panel and its keys.
+         *
+         * The IME window cannot sample the app behind it, so this is not a real blur: it paints
+         * the *material* cues of etched glass -- a faint vertical sheen, fine grain, and a lit top
+         * edge -- on top of the translucent back colour. Keys get the same treatment, which is
+         * what makes them read as glass caps rather than flat tiles.
+         */
+        val glassKeyboard = switch(
+            R.string.keyboard_glass,
+            GLASS_KEYBOARD,
+            true,
+            R.string.keyboard_glass_summary,
+        )
+
+        /**
+         * How much of that veneer to paint, in percent of the look the constants were tuned at.
+         *
+         * A separate knob from the switch because the two answer different questions: the switch
+         * says whether the material exists at all, this says how loud it is. Light themes wash the
+         * highlights out and want more, dark ones carry them further and often want less -- and
+         * zero here is the same as off, which keeps the row usable as a fade-out.
+         *
+         * The row is disabled while the switch is off rather than hidden, so the setting keeps its
+         * place on the page and its value survives the switch.
+         */
+        val glassStrength = int(
+            R.string.keyboard_glass_strength,
+            GLASS_STRENGTH,
+            100,
+            0,
+            GLASS_STRENGTH_MAX,
+            "%",
+            enableUiOn = { glassKeyboard.getValue() },
+        )
+
+        /**
+         * Makes the keyboard's own backdrop a frosted, translucent pane.
+         *
+         * [glassKeyboard] paints the material's cues *on top of* whatever the panel is; this
+         * changes what the panel is made of. The back colour drops to a translucent, slightly
+         * milky tint, and a theme that brings a `keyboard_background` image gets that image
+         * blurred before it is drawn -- the same five layers GlassKit describes (backdrop, blur,
+         * tint, edge, grain), with the last two coming from [glassKeyboard].
+         *
+         * Off by default: it overrides what the theme says the keyboard looks like, and a theme
+         * that was tuned to be opaque should stay that way until someone asks otherwise.
+         */
+        val glassBackdrop = switch(
+            R.string.keyboard_glass_backdrop,
+            GLASS_BACKDROP,
+            false,
+            R.string.keyboard_glass_backdrop_summary,
+        )
+
+        /**
+         * How far that pane is taken, in percent of the tuned look.
+         *
+         * One knob moves all four of its dials together -- opacity, the white in the tint, the blur
+         * radius and the saturation put back -- because they are one impression: a pane that got
+         * more transparent without also getting blurrier would read as tinted plastic. 0 % is the
+         * theme's own opaque colour, so the slider doubles as a fade-out; 200 % is as see-through
+         * as the range goes.
+         *
+         * Disabled rather than hidden while the switch is off, like [glassStrength], so the row
+         * keeps its place and its value survives the toggle.
+         */
+        val glassBackdropStrength = int(
+            R.string.keyboard_glass_backdrop_strength,
+            GLASS_BACKDROP_STRENGTH,
+            100,
+            0,
+            GLASS_BACKDROP_STRENGTH_MAX,
+            "%",
+            enableUiOn = { glassBackdrop.getValue() },
+        )
         val hideKeyHint = switch(R.string.hide_key_hint, HIDE_KEY_HINT, false)
 
         val popupOnKeyPress = switch(R.string.popup_on_key_press, POPUP_ON_KEY_PRESS, false)
@@ -596,6 +695,7 @@ class AppPrefs(
             const val CORNER_TOGGLES_COMPOSING = "corner_toggles_composing"
             const val RIGHT_BUTTONS = "candidates_right_buttons"
             const val SWITCHES_IN_WINDOW = "switches_in_window"
+            const val SWITCHES_DEFAULT_OPEN = "switches_default_open"
             const val TWO_ROW_FONT = "candidates_two_row_font"
             const val ITEM_BACKGROUND = "candidates_item_background"
             const val ITEM_SPACING = "candidates_item_spacing"
@@ -748,6 +848,27 @@ class AppPrefs(
             SWITCHES_IN_WINDOW,
             false,
             R.string.switches_in_window_summary,
+        )
+
+        /**
+         * Whether the strip comes up on the quick switches instead of the candidates.
+         *
+         * Off, the strip belongs to the candidates and the switches are one tap away through the
+         * stow toggle -- the row's long-standing behaviour. On, the switches are what the user
+         * sees first, so a set of corner buttons is reachable without opening anything; the
+         * toggle then reads the other way round, folding them back to the candidates.
+         *
+         * It is a *default*, not a latch: typing takes the row back to the candidates (the stow
+         * toggle is not on screen mid-composition, so the switches would be stranded), and the
+         * row returns to this state once the composition ends. A set of switches too wide for the
+         * strip still folds away on its own, since showing them squeezed into slivers is worse
+         * than the tap it saves.
+         */
+        val switchesDefaultOpen = switch(
+            R.string.switches_default_open,
+            SWITCHES_DEFAULT_OPEN,
+            false,
+            R.string.switches_default_open_summary,
         )
 
         /**

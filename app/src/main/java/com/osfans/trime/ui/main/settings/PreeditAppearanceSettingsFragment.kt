@@ -18,7 +18,7 @@ import com.osfans.trime.data.prefs.PreferenceDelegateFragment
 import com.osfans.trime.data.prefs.ProviderSections
 import com.osfans.trime.data.theme.ColorManager
 import com.osfans.trime.ui.main.settings.theme.BuiltinColorDialog
-import com.osfans.trime.ui.main.settings.theme.BuiltinColorsActivity
+import com.osfans.trime.ui.main.settings.theme.KeyColorEditorActivity
 import com.osfans.trime.util.ColorUtils as TrimeColorUtils
 import com.osfans.trime.util.addPreference
 import com.osfans.trime.util.startActivity
@@ -77,7 +77,7 @@ class PreeditAppearanceSettingsFragment :
             R.string.preedit_more_in_builtin,
             R.string.preedit_more_in_builtin_summary,
         ) {
-            startActivity<BuiltinColorsActivity>()
+            startActivity<KeyColorEditorActivity>()
         }
         // The colour needs the ARGB picker, which lives above the preferences layer, so the row is
         // wired here: the tap opens the dialog, the summary keeps the value in view, and the
